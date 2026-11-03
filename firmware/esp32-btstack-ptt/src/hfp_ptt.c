@@ -37,7 +37,7 @@
 
 // fire4 (the laptop run where the button emitted AT+CTKST=0,1) had no SCO
 // link: hfp_ag.py never opens one. Set to 1 to open SCO once the SLC is up.
-#define OPEN_SCO 0
+#define OPEN_SCO 1
 
 // After an SLC drop, stop dialing this long so the headset can reconnect on
 // its own. In fire4 the first connection dropped right after AT+CSRSF and the
