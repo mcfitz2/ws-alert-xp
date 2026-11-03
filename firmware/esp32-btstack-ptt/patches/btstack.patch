@@ -1,0 +1,40 @@
+diff --git a/port/esp32/components/btstack/Kconfig b/port/esp32/components/btstack/Kconfig
+index a7add23..a19a6a1 100644
+--- a/port/esp32/components/btstack/Kconfig
++++ b/port/esp32/components/btstack/Kconfig
+@@ -7,7 +7,9 @@ config BTSTACK_AUDIO
+         Select this option to enable BTstack's audio driver
+ 
+ config BTSTACK_INTERNAL_BT
+-    visible if BT_CONTROLLER_ONLY
++    # 'visible if' is only valid on a menu/menuconfig; PlatformIO's kconfiglib
++    # rejects it on a plain config. The 'default y if BT_CONTROLLER_ONLY' below
++    # already enables this exactly when we need it.
+     bool "Support for SoC Bluetooth"
+     default y if BT_CONTROLLER_ONLY
+     default n
+diff --git a/port/esp32/components/btstack/cmake/BTstack_project.cmake b/port/esp32/components/btstack/cmake/BTstack_project.cmake
+index 795d234..a3034ee 100644
+--- a/port/esp32/components/btstack/cmake/BTstack_project.cmake
++++ b/port/esp32/components/btstack/cmake/BTstack_project.cmake
+@@ -1,11 +1,18 @@
+-idf_build_get_property(BTSTACK_ROOT BTSTACK_ROOT)
++# idf_build_get/set_property are undefined during PlatformIO's requirements
++# scan (component CMake runs in cmake -P script mode there). Guard them so the
++# env-var fallback still resolves BTSTACK_ROOT in that phase.
++if(COMMAND idf_build_get_property)
++    idf_build_get_property(BTSTACK_ROOT BTSTACK_ROOT)
++endif()
+ if( NOT DEFINED BTSTACK_ROOT )
+     if( NOT DEFINED ENV{BTSTACK_ROOT} )
+         set(BTSTACK_ROOT ${CMAKE_SOURCE_DIR}/../..)
+     else()
+         set(BTSTACK_ROOT $ENV{BTSTACK_ROOT})
+     endif()
+-    idf_build_set_property(BTSTACK_ROOT "${BTSTACK_ROOT}")
++    if(COMMAND idf_build_set_property)
++        idf_build_set_property(BTSTACK_ROOT "${BTSTACK_ROOT}")
++    endif()
+ endif()
+ 
+ list(APPEND EXTRA_COMPONENT_DIRS "${BTSTACK_ROOT}/port/esp32/components/")
