@@ -19,8 +19,11 @@ CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 # btstack_run_loop_get_time_ms() resolution.
 CONFIG_FREERTOS_HZ=1000
 
-# Larger single-app partition for the HFP example image.
-CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+# 4 MB flash, one 4 MB-ish factory app (partitions.csv) so the embedded
+# commentary clip fits next to the HFP/A2DP image.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 
 # HCI/AT dump to stdout. The embedded stdout dumper is patched to skip SCO
 # packets (they flood the UART every ~20ms and starve the run loop), so this

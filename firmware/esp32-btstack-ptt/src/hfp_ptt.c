@@ -32,6 +32,7 @@
 #include "hci_dump_embedded_stdout.h"
 #include "sco_demo_util.h"
 #include "a2dp_src.h"
+#include "sco_audio.h"
 #include "driver/gpio.h"
 
 // Onboard LED on most ESP32 devkits; lit while keyed.
@@ -54,8 +55,8 @@
 #define OPEN_SCO 0
 
 // SCO audio test: SCO_AUDIO_DELAY_MS after SLC up (after the radio-mode
-// probe has armed the button), open SCO and stream sco_demo audio (MOD music,
-// see CMakeLists) to the headset. Logs the negotiated codec. With
+// probe has armed the button), open SCO and stream the embedded commentary
+// clip (sco_audio.c) to the headset, muted while PTT is held. Logs the negotiated codec. With
 // OFFER_MSBC the AG offers mSBC too; the WS6 sends AT+BAC=1,2, so BTstack
 // picks mSBC (16 kHz, eSCO T1). 0 = CVSD only (8 kHz) for an A/B by ear.
 #define SCO_AUDIO_TEST 1
@@ -248,6 +249,9 @@ static void set_ptt(bool on)
     gpio_set_level(RADIO_PTT_GPIO, on ? 0 : 1);
     gpio_set_level(LED_GPIO, on ? 1 : 0);
     printf("[ptt] PTT %s\n", on ? "KEYED" : "released");
+#if SCO_AUDIO_TEST
+    sco_audio_mute(on);  // FM commentary off while transmitting
+#endif
 #if TX_TIMEOUT_MS
     btstack_run_loop_remove_timer(&tx_timeout_timer);
     if (on) {
@@ -370,7 +374,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
 
         case HCI_EVENT_SCO_CAN_SEND_NOW:
 #if SCO_AUDIO_TEST
-            sco_demo_send(hci_event_sco_can_send_now_get_handle(event));
+            sco_audio_send(hci_event_sco_can_send_now_get_handle(event));
 #else
             sco_send_silence(hci_event_sco_can_send_now_get_handle(event));
 #endif
@@ -437,7 +441,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
                 uint8_t codec = hfp_subevent_audio_connection_established_get_negotiated_codec(event);
                 printf("[ptt] SCO up (handle 0x%04x), codec %s\n", sco_handle,
                        codec == HFP_CODEC_MSBC ? "mSBC 16 kHz" : "CVSD 8 kHz");
-                sco_demo_set_codec(codec);
+                sco_audio_start(codec);
 #else
                 printf("[ptt] SCO up (handle 0x%04x) - headset now in radio mode\n", sco_handle);
 #endif
@@ -447,7 +451,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
             case HFP_SUBEVENT_AUDIO_CONNECTION_RELEASED:
                 printf("[ptt] SCO released\n");
 #if SCO_AUDIO_TEST
-                sco_demo_close();
+                sco_audio_stop();
 #endif
                 sco_handle = HCI_CON_HANDLE_INVALID;
                 break;
@@ -514,7 +518,10 @@ int btstack_main(int argc, const char *argv[])
     // debugging with no SCO:
     //   hci_dump_init(hci_dump_embedded_stdout_get_instance());
 
-    sco_demo_init();
+    sco_demo_init();  // sets the CVSD voice setting (0x60)
+#if SCO_AUDIO_TEST
+    sco_audio_init();
+#endif
 
     gap_set_local_name("WS-PTT 00:00:00:00:00:00");
     gap_discoverable_control(1);
