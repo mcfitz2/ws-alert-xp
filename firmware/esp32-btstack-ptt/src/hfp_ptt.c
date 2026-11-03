@@ -42,6 +42,7 @@ static bd_addr_t peer_addr;
 static btstack_packet_callback_registration_t hci_event_callback_registration;
 static btstack_timer_source_t connect_timer;
 static hci_con_handle_t acl_handle = HCI_CON_HANDLE_INVALID;
+static hci_con_handle_t sco_handle = HCI_CON_HANDLE_INVALID;
 static bool slc_connected = false;
 
 // Only offer CVSD (codec id 1): the WS6 radio-mode handshake used narrow-band
@@ -81,6 +82,28 @@ enum { ID_VOLOUT = 1, ID_CTKST, ID_CSRSF };
 static hfp_custom_at_command_t cmd_volout = { .command = "AT+VOLOUT?", .command_id = ID_VOLOUT };
 static hfp_custom_at_command_t cmd_ctkst  = { .command = "AT+CTKST=",  .command_id = ID_CTKST };
 static hfp_custom_at_command_t cmd_csrsf  = { .command = "AT+CSRSF=",  .command_id = ID_CSRSF };
+
+// Keep the SCO link alive by sending silence (zeros) on every can-send-now
+// slot. We only need the SCO link UP to gate the WS6's radio mode; we do not
+// bridge audio in Phase A. The sco_demo sine generator loaded the run loop and
+// fed tone into the headset, which coincided with the WS6 faulting as SCO
+// opened. A zero-filled payload is the lightest thing that keeps the baseband
+// SCO flow fed so the controller never underruns.
+static void sco_send_silence(hci_con_handle_t h)
+{
+    if (h == HCI_CON_HANDLE_INVALID) return;
+    int sco_packet_length = hci_get_sco_packet_length_for_connection(h);
+    int sco_payload_length = sco_packet_length - 3;
+
+    hci_reserve_packet_buffer();
+    uint8_t *sco_packet = hci_get_outgoing_packet_buffer();
+    memset(&sco_packet[3], 0, sco_payload_length);
+    little_endian_store_16(sco_packet, 0, h);
+    sco_packet[2] = sco_payload_length;
+    hci_send_sco_packet_buffer(sco_packet_length);
+
+    hci_request_sco_can_send_now_event_for_con_handle(h);
+}
 
 static void set_ptt(bool on)
 {
@@ -156,7 +179,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
             break;
 
         case HCI_EVENT_SCO_CAN_SEND_NOW:
-            sco_demo_send(hci_event_sco_can_send_now_get_handle(event));
+            sco_send_silence(hci_event_sco_can_send_now_get_handle(event));
             break;
 
         case HCI_EVENT_HFP_META:
@@ -190,15 +213,14 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
                     printf("[ptt] SCO failed, status 0x%02x\n", status);
                     break;
                 }
-                hci_con_handle_t sco = hfp_subevent_audio_connection_established_get_sco_handle(event);
-                sco_demo_set_codec(HFP_CODEC_CVSD);
-                hci_request_sco_can_send_now_event();
-                printf("[ptt] SCO up (handle 0x%04x) - headset now in radio mode\n", sco);
+                sco_handle = hfp_subevent_audio_connection_established_get_sco_handle(event);
+                hci_request_sco_can_send_now_event_for_con_handle(sco_handle);
+                printf("[ptt] SCO up (handle 0x%04x) - headset now in radio mode\n", sco_handle);
                 break;
             }
             case HFP_SUBEVENT_AUDIO_CONNECTION_RELEASED:
                 printf("[ptt] SCO released\n");
-                sco_demo_close();
+                sco_handle = HCI_CON_HANDLE_INVALID;
                 break;
             case HFP_SUBEVENT_CUSTOM_AT_COMMAND:
                 handle_custom_at(event);
@@ -214,7 +236,9 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
         break;
 
     case HCI_SCO_DATA_PACKET:
-        sco_demo_receive(event, event_size);
+        // Inbound mic audio from the headset. Phase A does not use it; dropping
+        // it (no CVSD/PLC decode) keeps the run loop free for the RFCOMM/CTKST
+        // button traffic we care about.
         break;
 
     default:
