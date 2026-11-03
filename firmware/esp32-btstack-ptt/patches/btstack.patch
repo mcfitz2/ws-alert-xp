@@ -1,3 +1,18 @@
+diff --git a/platform/embedded/hci_dump_embedded_stdout.c b/platform/embedded/hci_dump_embedded_stdout.c
+index c8160d7..dffebb5 100644
+--- a/platform/embedded/hci_dump_embedded_stdout.c
++++ b/platform/embedded/hci_dump_embedded_stdout.c
+@@ -124,6 +124,10 @@ static void hci_dump_embedded_stdout_packet(uint8_t packet_type, uint8_t in, uin
+ }
+ 
+ static void hci_dump_embedded_stdout_log_packet(uint8_t packet_type, uint8_t in, uint8_t *packet, uint16_t len) {
++    // WS6-PTT: skip SCO packets. With SCO audio flowing they arrive every ~20ms
++    // and flood the 115200 UART, starving the run loop. We only want to see the
++    // ACL/RFCOMM (AT command) exchange and HCI events here.
++    if (packet_type == HCI_SCO_DATA_PACKET) return;
+     hci_dump_embedded_stdout_timestamp();
+     hci_dump_embedded_stdout_packet(packet_type, in, packet, len);
+ }
 diff --git a/port/esp32/components/btstack/Kconfig b/port/esp32/components/btstack/Kconfig
 index a7add23..a19a6a1 100644
 --- a/port/esp32/components/btstack/Kconfig

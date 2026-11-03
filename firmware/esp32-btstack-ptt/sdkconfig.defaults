@@ -22,11 +22,10 @@ CONFIG_FREERTOS_HZ=1000
 # Larger single-app partition for the HFP example image.
 CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
 
-# HCI/AT dump DISABLED: with SCO audio flowing it prints every 60-byte inbound
-# SCO packet (~20ms apart) over the 115200 UART, saturating serial and starving
-# the run loop so RFCOMM/CTKST button events are lost. App-level printf ([ptt]
-# custom AT lines) still shows the CTKST traffic we care about.
-# CONFIG_BTSTACK_HCI_DUMP_STDOUT is not set
+# HCI/AT dump to stdout. The embedded stdout dumper is patched to skip SCO
+# packets (they flood the UART every ~20ms and starve the run loop), so this
+# gives us the ACL/RFCOMM AT exchange and HCI events without the SCO spam.
+CONFIG_BTSTACK_HCI_DUMP_STDOUT=y
 
 # Allow one SCO/eSCO link (default 0 => controller rejects SCO with 0x0a).
 CONFIG_BTDM_CTRL_BR_EDR_MAX_SYNC_CONN=1
