@@ -22,9 +22,11 @@ CONFIG_FREERTOS_HZ=1000
 # Larger single-app partition for the HFP example image.
 CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
 
-# Plain-text HCI/AT dump to stdout so the WS6's mid-SLC command text is
-# readable in the serial log.
-CONFIG_BTSTACK_HCI_DUMP_STDOUT=y
+# HCI/AT dump DISABLED: with SCO audio flowing it prints every 60-byte inbound
+# SCO packet (~20ms apart) over the 115200 UART, saturating serial and starving
+# the run loop so RFCOMM/CTKST button events are lost. App-level printf ([ptt]
+# custom AT lines) still shows the CTKST traffic we care about.
+# CONFIG_BTSTACK_HCI_DUMP_STDOUT is not set
 
 # Allow one SCO/eSCO link (default 0 => controller rejects SCO with 0x0a).
 CONFIG_BTDM_CTRL_BR_EDR_MAX_SYNC_CONN=1
