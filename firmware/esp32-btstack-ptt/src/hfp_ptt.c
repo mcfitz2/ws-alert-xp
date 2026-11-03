@@ -266,6 +266,11 @@ int btstack_main(int argc, const char *argv[])
     hfp_ag_init_hf_indicators(hf_indicators_nr, hf_indicators);
     hfp_ag_init_call_hold_services(call_hold_services_nr, call_hold_services);
 
+    // Force basic SCO (HV1/HV3) only. BTstack otherwise picks an eSCO (EV3)
+    // link setting from the controller's LMP features, which the ESP32's
+    // SCO-over-HCI path rejects (status 0x0a). HV3/CVSD is what we need anyway.
+    hfp_set_sco_packet_types(SCO_PACKET_TYPES_HV1 | SCO_PACKET_TYPES_HV3);
+
     // Answer the WS6's proprietary commands ourselves.
     hfp_ag_register_custom_at_command(&cmd_volout);
     hfp_ag_register_custom_at_command(&cmd_ctkst);
