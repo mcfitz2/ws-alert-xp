@@ -100,9 +100,8 @@ enum { ID_VOLOUT = 1, ID_CTKST, ID_CSRSF, ID_BLDN };
 static hfp_custom_at_command_t cmd_volout = { .command = "AT+VOLOUT?", .command_id = ID_VOLOUT };
 static hfp_custom_at_command_t cmd_ctkst  = { .command = "AT+CTKST=",  .command_id = ID_CTKST };
 static hfp_custom_at_command_t cmd_csrsf  = { .command = "AT+CSRSF=",  .command_id = ID_CSRSF };
-// The physical button is a standard HFP call button: over Bluetooth it emits
-// AT+BLDN (redial), never a PTT/CTKST key. Register it so our handler sees it
-// (BTstack otherwise consumes it) and we can toggle GPIO on press.
+// AT+BLDN (redial) shows up now and then; register it so BTstack doesn't act
+// on it as a redial request.
 static hfp_custom_at_command_t cmd_bldn   = { .command = "AT+BLDN",    .command_id = ID_BLDN };
 
 // Keep the SCO link alive by sending silence (zeros) on every can-send-now
@@ -171,12 +170,9 @@ static void handle_custom_at(const uint8_t *event)
     }
 
     if (strstr(cmd, "BLDN")) {
-        // The physical button. Toggle PTT GPIO so we can see it on the LED and
-        // characterize how reliably a press maps to one BLDN.
-        static int toggle = 0;
-        toggle = !toggle;
-        set_ptt(toggle);
-        printf("[ptt] *** BUTTON (AT+BLDN) *** -> GPIO %s\n", toggle ? "ON" : "OFF");
+        // Seen occasionally (fire3, fire5). Not the PTT path - PTT arrives as
+        // AT+CTKST=0,1 / 0,0 - so only log it.
+        printf("[ptt] AT+BLDN (ignored)\n");
         hfp_ag_send_command_result_code(h, true);
         return;
     }
