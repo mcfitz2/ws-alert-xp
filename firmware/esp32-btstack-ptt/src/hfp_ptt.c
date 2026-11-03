@@ -317,12 +317,12 @@ int btstack_main(int argc, const char *argv[])
     hfp_ag_init_hf_indicators(hf_indicators_nr, hf_indicators);
     hfp_ag_init_call_hold_services(call_hold_services_nr, call_hold_services);
 
-    // Allow eSCO (EV3 = S1, 2EV3 = S3/S4) with HV3 as fallback. The earlier
-    // 0x0a eSCO reject was "synchronous connection limit exceeded" from
-    // MAX_SYNC_CONN=0, now set to 1. If the controller still rejects an eSCO
-    // setting, BTstack retries the next one down to HV3.
-    hfp_set_sco_packet_types(SCO_PACKET_TYPES_EV3 | SCO_PACKET_TYPES_2EV3 |
-                             SCO_PACKET_TYPES_HV3);
+    // Force basic HV1/HV3 SCO. Under codec negotiation BTstack picks the eSCO
+    // S4 link setting (2EV3, latency 0x000c), which this ESP32 controller
+    // rejects with status 0x1E (invalid LMP params) and then does NOT fall back
+    // before the 20 s supervision timeout kills the ACL. HV3 comes up reliably
+    // and the button arming depends on the AT recipe, not the SCO packet type.
+    hfp_set_sco_packet_types(SCO_PACKET_TYPES_HV1 | SCO_PACKET_TYPES_HV3);
 
     // Answer the WS6's proprietary commands ourselves.
     hfp_ag_register_custom_at_command(&cmd_volout);
