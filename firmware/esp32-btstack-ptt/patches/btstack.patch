@@ -55,7 +55,7 @@ index 1384129..2dbdc2a 100644
      }
  
 diff --git a/port/esp32/components/btstack_config/include/btstack_config.h b/port/esp32/components/btstack_config/include/btstack_config.h
-index 7a89cc8..4b2e97d 100644
+index 7a89cc8..47c9ae2 100644
 --- a/port/esp32/components/btstack_config/include/btstack_config.h
 +++ b/port/esp32/components/btstack_config/include/btstack_config.h
 @@ -25,7 +25,11 @@
@@ -70,4 +70,18 @@ index 7a89cc8..4b2e97d 100644
 +// #define ENABLE_LOG_INFO
  #define ENABLE_PRINTF_HEXDUMP
  #define ENABLE_MODPLAYER
+ 
+@@ -48,6 +52,13 @@
+ 
+ #define ENABLE_HFP_WIDE_BAND_SPEECH
+ 
++// Route SCO voice over HCI (ESP32 controller-only, SCO_DATA_PATH_HCI). Without
++// this, hci.c treats every inbound SCO packet (H4 type 0x03) as invalid and
++// floods log_error("hci packet invalid: type 0x03"), starving the run loop so
++// the RFCOMM/CTKST button events get lost. The port skeleton config defines it;
++// our resolved copy had dropped it.
++#define ENABLE_SCO_OVER_HCI
++
+ // mainly needed for AVRCP Browsing, can be removed otherwise to reduce code size
+ #define ENABLE_L2CAP_ENHANCED_RETRANSMISSION_MODE
  
