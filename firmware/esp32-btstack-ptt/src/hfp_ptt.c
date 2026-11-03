@@ -302,12 +302,13 @@ int btstack_main(int argc, const char *argv[])
     // the WS6 accepts (no 2.1 s timeout) but does not fully treat as radio
     // audio, so the PTT button never arms. We still offer only CVSD (codec 1),
     // so negotiation resolves to CVSD and the HV3 SCO type is unchanged.
-    // fire4 (the working laptop capture) ran a minimal AG: hfp_ag.py answered
-    // AT+BRSF= with "+BRSF: 0" (--brsf default 0) — NO optional features at all,
-    // no codec negotiation, no in-band ring. Advertising in-band ring makes the
-    // WS6 expect ring audio in the SCO and treat us as a phone; match fire4's
-    // empty feature set exactly.
-    uint16_t supported_features = 0;
+    // BRSF 0 (no features) regressed: the WS6 stalled right after AT+CSRSF and
+    // never ran the CTKST/VOLOUT radio-mode probe. Advertising in-band ring +
+    // extended error codes is what makes the WS6 run the probe to the stable
+    // talk-key-idle state. Keep codec negotiation OFF (fire4 parity).
+    uint16_t supported_features =
+        (1 << HFP_AGSF_EXTENDED_ERROR_RESULT_CODES) |
+        (1 << HFP_AGSF_IN_BAND_RING_TONE);
 
     rfcomm_init();
     hfp_ag_init(rfcomm_channel_nr);
