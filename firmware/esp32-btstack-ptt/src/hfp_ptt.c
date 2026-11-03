@@ -73,6 +73,12 @@
 // headset came back ~47s later, then ran the radio-mode probe.
 #define REDIAL_HOLDOFF_MS 60000
 
+// fire29: a headset-initiated reconnect stopped after AT+CSRSF, with no probe
+// (so the button wasn't armed) for minutes. If the probe's AT+VOLOUT? hasn't
+// arrived this long after CSRSF (normally ~5 s), drop the SLC and dial at once
+// (skips the holdoff); fire26/27 dialed SLCs ran the probe.
+#define PROBE_WATCHDOG_MS 12000
+
 // Open an A2DP stream this long after SLC up (after the radio-mode probe).
 #define A2DP_TEST 0
 #define A2DP_DELAY_MS 8000
@@ -111,6 +117,17 @@ static hci_con_handle_t sco_handle = HCI_CON_HANDLE_INVALID;
 static bool slc_connected = false;
 static uint32_t slc_released_ms = 0;
 static bool slc_was_up = false;
+static btstack_timer_source_t probe_timer;
+static bool redial_now = false;
+
+static void probe_timer_handler(btstack_timer_source_t *ts)
+{
+    (void)ts;
+    if (!slc_connected) return;
+    printf("[ptt] no radio-mode probe after CSRSF - dropping SLC to redial\n");
+    redial_now = true;
+    hfp_ag_release_service_level_connection(acl_handle);
+}
 
 #if A2DP_TEST
 static btstack_timer_source_t a2dp_timer;
@@ -268,12 +285,13 @@ static void set_ptt(bool on)
 // never pages, even in pairing mode), so the AG must initiate.
 static void connect_timer_handler(btstack_timer_source_t *ts)
 {
-    bool holdoff = slc_was_up &&
+    bool holdoff = !redial_now && slc_was_up &&
         (btstack_run_loop_get_time_ms() - slc_released_ms) < REDIAL_HOLDOFF_MS;
     if (!slc_connected && holdoff) {
         printf("[ptt] waiting for headset to reconnect...\n");
     } else if (!slc_connected) {
         printf("[ptt] dialing headset...\n");
+        redial_now = false;
         hfp_ag_establish_service_level_connection(peer_addr);
     }
     btstack_run_loop_set_timer(ts, 5000);
@@ -295,6 +313,7 @@ static void handle_custom_at(const uint8_t *event)
         snprintf(resp, sizeof(resp), "\r\n+VOLOUT: %d\r\n", VOLOUT_LEVEL);
         hfp_ag_send_unsolicited_result_code(h, resp);
         hfp_ag_send_command_result_code(h, true);
+        btstack_run_loop_remove_timer(&probe_timer);  // probe arrived
 #if SCO_AUDIO_TEST
         // Mid-probe: let the remaining CTKST=0,0 finish, then open SCO.
         btstack_run_loop_remove_timer(&sco_timer);
@@ -332,6 +351,10 @@ static void handle_custom_at(const uint8_t *event)
         // reference for this.
         // With BTstack, only a bare OK has made the headset go on to the
         // CTKST/VOLOUT probe (fire5); the full line leaves it idle.
+        btstack_run_loop_remove_timer(&probe_timer);
+        btstack_run_loop_set_timer_handler(&probe_timer, &probe_timer_handler);
+        btstack_run_loop_set_timer(&probe_timer, PROBE_WATCHDOG_MS);
+        btstack_run_loop_add_timer(&probe_timer);
 #if CSRSF_FULL_REPLY
         hfp_ag_send_unsolicited_result_code(h, "\r\n+CSRSF: 1,1,1,1,1,0,3\r\n");
 #endif
@@ -429,6 +452,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
             case HFP_SUBEVENT_SERVICE_LEVEL_CONNECTION_RELEASED:
                 printf("[ptt] SLC released\n");
                 slc_connected = false;
+                btstack_run_loop_remove_timer(&probe_timer);
                 slc_released_ms = btstack_run_loop_get_time_ms();
                 acl_handle = HCI_CON_HANDLE_INVALID;
                 set_ptt(false);
