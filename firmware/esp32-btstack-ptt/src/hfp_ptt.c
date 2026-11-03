@@ -35,6 +35,15 @@
 // Output volume reported to the headset's AT+VOLOUT? query.
 #define VOLOUT_LEVEL 8
 
+// fire4 (the laptop run where the button emitted AT+CTKST=0,1) had no SCO
+// link: hfp_ag.py never opens one. Set to 1 to open SCO once the SLC is up.
+#define OPEN_SCO 0
+
+// After an SLC drop, stop dialing this long so the headset can reconnect on
+// its own. In fire4 the first connection dropped right after AT+CSRSF and the
+// headset came back ~47s later, then ran the radio-mode probe.
+#define REDIAL_HOLDOFF_MS 60000
+
 // The WS Alert XP headset.
 static const char *PEER_ADDR_STR = "00:15:F3:25:7D:E8";
 static bd_addr_t peer_addr;
@@ -44,6 +53,8 @@ static btstack_timer_source_t connect_timer;
 static hci_con_handle_t acl_handle = HCI_CON_HANDLE_INVALID;
 static hci_con_handle_t sco_handle = HCI_CON_HANDLE_INVALID;
 static bool slc_connected = false;
+static uint32_t slc_released_ms = 0;
+static bool slc_was_up = false;
 
 // Only offer CVSD (codec id 1): the WS6 radio-mode handshake used narrow-band
 // in the laptop capture, and Phase A does not bridge wide-band audio.
@@ -126,7 +137,11 @@ static void set_ptt(bool on)
 // never pages, even in pairing mode), so the AG must initiate.
 static void connect_timer_handler(btstack_timer_source_t *ts)
 {
-    if (!slc_connected) {
+    bool holdoff = slc_was_up &&
+        (btstack_run_loop_get_time_ms() - slc_released_ms) < REDIAL_HOLDOFF_MS;
+    if (!slc_connected && holdoff) {
+        printf("[ptt] waiting for headset to reconnect...\n");
+    } else if (!slc_connected) {
         printf("[ptt] dialing headset...\n");
         hfp_ag_establish_service_level_connection(peer_addr);
     }
@@ -174,13 +189,15 @@ static void handle_custom_at(const uint8_t *event)
         return;
     }
 
-    // AT+CSRSF, and everything else, fall through to a bare OK. Confirmed from
-    // the full working HCI capture (ws-pair.btsnoop): the AG never emits a
-    // +CSRSF line. Connections that answered CSRSF/CTKST/VOLOUT with ERROR (or
-    // anything but OK) never armed the button; the ones that answered OK +
-    // real +VOLOUT:8, over a CVSD (+BCS:1) link, reached the probe and the
-    // button then emitted unsolicited +CTKST:0,1. fire4.txt's --resp +CSRSF
-    // line was a config that did NOT match the working capture.
+    if (strstr(cmd, "CSRSF")) {
+        // fire4 (the run where the button emitted AT+CTKST=0,1) answered with
+        // the full line, then OK. ws-pair.btsnoop predates fire4 and is not a
+        // reference for this.
+        hfp_ag_send_unsolicited_result_code(h, "+CSRSF: 1,1,1,1,1,0,3");
+        hfp_ag_send_command_result_code(h, true);
+        return;
+    }
+
     hfp_ag_send_command_result_code(h, true);  // plain OK
 }
 
@@ -219,14 +236,19 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
                 }
                 acl_handle = hfp_subevent_service_level_connection_established_get_acl_handle(event);
                 slc_connected = true;
-                printf("[ptt] SLC up, opening SCO audio (the radio-mode gate)\n");
-                // The gate: open SCO as soon as the SLC is up.
+                slc_was_up = true;
+#if OPEN_SCO
+                printf("[ptt] SLC up, opening SCO audio\n");
                 hfp_ag_establish_audio_connection(acl_handle);
+#else
+                printf("[ptt] SLC up (no SCO, as in fire4)\n");
+#endif
                 break;
             }
             case HFP_SUBEVENT_SERVICE_LEVEL_CONNECTION_RELEASED:
                 printf("[ptt] SLC released\n");
                 slc_connected = false;
+                slc_released_ms = btstack_run_loop_get_time_ms();
                 acl_handle = HCI_CON_HANDLE_INVALID;
                 set_ptt(false);
                 break;
