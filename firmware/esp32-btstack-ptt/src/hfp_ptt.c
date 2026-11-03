@@ -54,13 +54,15 @@
 // link: hfp_ag.py never opens one. Set to 1 to open SCO once the SLC is up.
 #define OPEN_SCO 0
 
-// SCO audio test: SCO_AUDIO_DELAY_MS after SLC up (after the radio-mode
-// probe has armed the button), open SCO and stream the embedded commentary
-// clip (sco_audio.c) to the headset, muted while PTT is held. Logs the negotiated codec. With
+// SCO audio test: SCO_AUDIO_DELAY_MS after the radio-mode probe's AT+VOLOUT?
+// (so the button is armed first), open SCO and stream the embedded commentary
+// clip (sco_audio.c) to the headset, muted while PTT is held. fire28: a fixed
+// 10 s timer from SLC up opened SCO before a late probe, and the button never
+// armed. No probe -> no SCO. Logs the negotiated codec. With
 // OFFER_MSBC the AG offers mSBC too; the WS6 sends AT+BAC=1,2, so BTstack
 // picks mSBC (16 kHz, eSCO T1). 0 = CVSD only (8 kHz) for an A/B by ear.
 #define SCO_AUDIO_TEST 1
-#define SCO_AUDIO_DELAY_MS 10000
+#define SCO_AUDIO_DELAY_MS 3000
 #define OFFER_MSBC 1
 
 // 1: answer AT+CSRSF with "+CSRSF: 1,1,1,1,1,0,3" then OK (fire4). 0: bare OK.
@@ -293,6 +295,13 @@ static void handle_custom_at(const uint8_t *event)
         snprintf(resp, sizeof(resp), "\r\n+VOLOUT: %d\r\n", VOLOUT_LEVEL);
         hfp_ag_send_unsolicited_result_code(h, resp);
         hfp_ag_send_command_result_code(h, true);
+#if SCO_AUDIO_TEST
+        // Mid-probe: let the remaining CTKST=0,0 finish, then open SCO.
+        btstack_run_loop_remove_timer(&sco_timer);
+        btstack_run_loop_set_timer_handler(&sco_timer, &sco_timer_handler);
+        btstack_run_loop_set_timer(&sco_timer, SCO_AUDIO_DELAY_MS);
+        btstack_run_loop_add_timer(&sco_timer);
+#endif
         return;
     }
 
@@ -400,12 +409,6 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
                 hfp_ag_establish_audio_connection(acl_handle);
 #else
                 printf("[ptt] SLC up (no SCO, as in fire4)\n");
-#endif
-#if SCO_AUDIO_TEST
-                btstack_run_loop_remove_timer(&sco_timer);
-                btstack_run_loop_set_timer_handler(&sco_timer, &sco_timer_handler);
-                btstack_run_loop_set_timer(&sco_timer, SCO_AUDIO_DELAY_MS);
-                btstack_run_loop_add_timer(&sco_timer);
 #endif
 #if A2DP_TEST
                 btstack_run_loop_remove_timer(&a2dp_timer);
