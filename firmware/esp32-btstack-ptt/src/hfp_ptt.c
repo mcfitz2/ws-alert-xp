@@ -156,9 +156,11 @@ static void handle_custom_at(const uint8_t *event)
     }
 
     if (strstr(cmd, "CSRSF")) {
-        // fire4 (the proven laptop capture) answered AT+CSRSF with a bare OK.
-        // Sending a "+CSRSF: ..." line back appears to stall the WS6 at the last
-        // SLC step so it never starts the radio-mode probe (VOLOUT?/CTKST=0,0).
+        // The actual fire4 capture answered AT+CSRSF with the full line
+        // "+CSRSF: 1,1,1,1,1,0,3" then OK (--resp), NOT a bare OK. (The earlier
+        // "bare OK is the gate" note was a misread; the real driver was codec
+        // negotiation + the WS6's natural first-connect-drops-then-reconnects.)
+        hfp_ag_send_unsolicited_result_code(h, "+CSRSF: 1,1,1,1,1,0,3");
         hfp_ag_send_command_result_code(h, true);
         return;
     }
@@ -293,27 +295,18 @@ int btstack_main(int argc, const char *argv[])
 
     l2cap_init();
 
-    // No eSCO (HFP_AGSF_ESCO_S4): the ESP32's SCO-over-HCI path and the WS6
-    // (BRSF=665 advertises no eSCO S4) only do basic CVSD SCO/HV3. Advertising
-    // eSCO makes BTstack attempt an EV3 setting the controller rejects (0x0a).
-    // Advertise codec negotiation so the SLC runs the HF's AT+BAC / AG +BCS
-    // exchange and the SCO is opened as a *negotiated* CVSD link, the way the
-    // BlueZ laptop (fire4) did it. Without it BTstack force-opens a raw SCO that
-    // the WS6 accepts (no 2.1 s timeout) but does not fully treat as radio
-    // audio, so the PTT button never arms. We still offer only CVSD (codec 1),
-    // so negotiation resolves to CVSD and the HV3 SCO type is unchanged.
-    // BRSF 0 (no features) regressed: the WS6 stalled right after AT+CSRSF and
-    // never ran the CTKST/VOLOUT radio-mode probe. Advertising in-band ring +
-    // extended error codes is what makes the WS6 run the probe to the stable
-    // talk-key-idle state. Keep codec negotiation OFF (fire4 parity).
-    // WS6 BRSF=665 sets bit 9 (eSCO S4 supported) — it wants an eSCO voice
-    // link, which is what a real two-way-radio adapter and fire4's Linux SCO
-    // socket used. Advertise eSCO S4 so BTstack negotiates an EV3/2EV3 eSCO
-    // link instead of lossy legacy HV3; the headset may only arm PTT on a
-    // reliable eSCO link.
+    // Exactly the feature set the working fire4 capture advertised: its
+    // hfp_ag.py was run with --brsf 3680, i.e. AG bits 5,6,9,10,11 = reject-
+    // call, enhanced-call-status, codec-negotiation, HF-indicators, eSCO-S4.
+    // Codec negotiation (bit 9) is required: fire4 ran the AT+BAC / +BCS:1 /
+    // AT+BCS=1 exchange, and the PTT button only armed after it. eSCO S4
+    // (bit 11) gets a reliable EV3/2EV3 CVSD link. No in-band ring, no extended
+    // error codes — fire4 advertised neither.
     uint16_t supported_features =
-        (1 << HFP_AGSF_EXTENDED_ERROR_RESULT_CODES) |
-        (1 << HFP_AGSF_IN_BAND_RING_TONE) |
+        (1 << HFP_AGSF_ABILITY_TO_REJECT_A_CALL) |
+        (1 << HFP_AGSF_ENHANCED_CALL_STATUS) |
+        (1 << HFP_AGSF_CODEC_NEGOTIATION) |
+        (1 << HFP_AGSF_HF_INDICATORS) |
         (1 << HFP_AGSF_ESCO_S4);
 
     rfcomm_init();
