@@ -240,11 +240,21 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
         }
         break;
 
-    case HCI_SCO_DATA_PACKET:
-        // Inbound mic audio from the headset. Phase A does not use it; dropping
-        // it (no CVSD/PLC decode) keeps the run loop free for the RFCOMM/CTKST
-        // button traffic we care about.
+    case HCI_SCO_DATA_PACKET: {
+        // Inbound mic audio from the headset. Phase A does not decode it, but we
+        // count it: nonzero mic payload means the headset considers the SCO link
+        // a live audio source (vs. an idle muted link), which is the state fire4
+        // reached when the PTT button armed.
+        static uint32_t rx_n = 0, rx_nonzero = 0;
+        uint16_t sco_len = event_size > 3 ? event_size - 3 : 0;
+        bool nz = false;
+        for (uint16_t i = 3; i < event_size; i++) { if (event[i] != 0) { nz = true; break; } }
+        if (nz) rx_nonzero++;
+        if ((++rx_n % 250) == 0)
+            printf("[ptt] sco rx %lu (nonzero %lu, len %u)\n",
+                   (unsigned long)rx_n, (unsigned long)rx_nonzero, sco_len);
         break;
+    }
 
     default:
         break;
@@ -292,13 +302,12 @@ int btstack_main(int argc, const char *argv[])
     // the WS6 accepts (no 2.1 s timeout) but does not fully treat as radio
     // audio, so the PTT button never arms. We still offer only CVSD (codec 1),
     // so negotiation resolves to CVSD and the HV3 SCO type is unchanged.
-    // fire4 (the working laptop capture) ran a minimal AG with NO codec
-    // negotiation (hfp_ag.py --brsf default, --bcs off) and a plain CVSD SCO.
-    // Advertising HFP_AGSF_CODEC_NEGOTIATION made the WS6 run the AT+BAC/+BCS
-    // path and did NOT arm the PTT button; drop it to match fire4 exactly.
-    uint16_t supported_features =
-        (1 << HFP_AGSF_EXTENDED_ERROR_RESULT_CODES) |
-        (1 << HFP_AGSF_IN_BAND_RING_TONE);
+    // fire4 (the working laptop capture) ran a minimal AG: hfp_ag.py answered
+    // AT+BRSF= with "+BRSF: 0" (--brsf default 0) — NO optional features at all,
+    // no codec negotiation, no in-band ring. Advertising in-band ring makes the
+    // WS6 expect ring audio in the SCO and treat us as a phone; match fire4's
+    // empty feature set exactly.
+    uint16_t supported_features = 0;
 
     rfcomm_init();
     hfp_ag_init(rfcomm_channel_nr);
