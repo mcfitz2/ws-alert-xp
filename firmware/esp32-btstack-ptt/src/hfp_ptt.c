@@ -62,7 +62,7 @@
 #define REDIAL_HOLDOFF_MS 60000
 
 // Open an A2DP stream this long after SLC up (after the radio-mode probe).
-#define A2DP_TEST 1
+#define A2DP_TEST 0
 #define A2DP_DELAY_MS 8000
 #define A2DP_RETRY_MS 6000
 #define A2DP_MAX_TRIES 6
@@ -78,7 +78,7 @@
 // 0x200408 = Audio/Video, Hands-free device (what PTT was proven with).
 // 0x5A020C = Phone, Smartphone with telephony/audio/capture/networking
 // services: test whether the WS6 only takes A2DP from a phone-class device.
-#define CLASS_OF_DEVICE 0x5A020C
+#define CLASS_OF_DEVICE 0x200408
 
 // fire20-22: while A2DP streams the WS6 never arms the PTT button. Pause the
 // stream PAUSE_AT_MS after SLC up and resume it PAUSE_FOR_MS later, to see if

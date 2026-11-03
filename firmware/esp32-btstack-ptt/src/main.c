@@ -50,7 +50,7 @@
 
 // Optional Bluetooth address override (fresh identity for the WS6). The
 // factory BT address of this board is E8:6B:EA:E0:20:7E.
-#define BT_ADDR_OVERRIDE 1
+#define BT_ADDR_OVERRIDE 0
 #if BT_ADDR_OVERRIDE
 static const uint8_t bt_addr_override[6] = { 0xE8, 0x6B, 0xEA, 0xE0, 0x20, 0x90 };
 #endif
