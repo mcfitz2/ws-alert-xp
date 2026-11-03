@@ -66,6 +66,10 @@
 #define A2DP_DELAY_MS 8000
 #define A2DP_RETRY_MS 6000
 #define A2DP_MAX_TRIES 6
+// Open A2DP right at boot, before the HFP dial, instead of after SLC up.
+// fire14/15: with the SLC up the WS6 refuses AVDTP with L2CAP "no resources".
+#define A2DP_FIRST 1
+#define A2DP_FIRST_HFP_DELAY_MS 15000
 
 // The WS Alert XP headset.
 static const char *PEER_ADDR_STR = "00:15:F3:25:7D:E8";
@@ -277,7 +281,13 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
             if (btstack_event_state_get_state(event) == HCI_STATE_WORKING) {
                 printf("[ptt] BTstack up, ready as \"%s\"\n", hfp_ag_service_name);
                 connect_timer.process = &connect_timer_handler;
+#if A2DP_TEST && A2DP_FIRST
+                printf("[ptt] A2DP first: dialing A2DP, HFP in %d ms\n", A2DP_FIRST_HFP_DELAY_MS);
+                a2dp_src_connect(peer_addr);
+                btstack_run_loop_set_timer(&connect_timer, A2DP_FIRST_HFP_DELAY_MS);
+#else
                 btstack_run_loop_set_timer(&connect_timer, 2000);
+#endif
                 btstack_run_loop_add_timer(&connect_timer);
             }
             break;
