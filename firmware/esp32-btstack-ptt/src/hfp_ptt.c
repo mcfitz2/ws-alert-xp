@@ -71,6 +71,11 @@
 #define A2DP_FIRST 1
 #define A2DP_FIRST_HFP_DELAY_MS 15000
 
+// 0x200408 = Audio/Video, Hands-free device (what PTT was proven with).
+// 0x5A020C = Phone, Smartphone with telephony/audio/capture/networking
+// services: test whether the WS6 only takes A2DP from a phone-class device.
+#define CLASS_OF_DEVICE 0x5A020C
+
 // The WS Alert XP headset.
 static const char *PEER_ADDR_STR = "00:15:F3:25:7D:E8";
 static bd_addr_t peer_addr;
@@ -415,8 +420,7 @@ int btstack_main(int argc, const char *argv[])
 
     gap_set_local_name("WS-PTT 00:00:00:00:00:00");
     gap_discoverable_control(1);
-    // Look like a phone (the class the WS6 expects of an audio gateway).
-    gap_set_class_of_device(0x200408);
+    gap_set_class_of_device(CLASS_OF_DEVICE);
     gap_set_bondable_mode(1);
     gap_ssp_set_io_capability(SSP_IO_CAPABILITY_NO_INPUT_NO_OUTPUT);
     gap_ssp_set_auto_accept(1);
