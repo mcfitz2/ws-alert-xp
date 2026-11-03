@@ -38,3 +38,20 @@ index 795d234..a3034ee 100644
  endif()
  
  list(APPEND EXTRA_COMPONENT_DIRS "${BTSTACK_ROOT}/port/esp32/components/")
+diff --git a/port/esp32/components/btstack_config/include/btstack_config.h b/port/esp32/components/btstack_config/include/btstack_config.h
+index 7a89cc8..4b2e97d 100644
+--- a/port/esp32/components/btstack_config/include/btstack_config.h
++++ b/port/esp32/components/btstack_config/include/btstack_config.h
+@@ -25,7 +25,11 @@
+ 
+ // BTstack features that can be enabled
+ #define ENABLE_LOG_ERROR
+-#define ENABLE_LOG_INFO
++// ENABLE_LOG_INFO disabled: with SCO audio flowing, btstack log_info prints
++// over the 115200 serial line for every inbound SCO packet, starving the run
++// loop so SCO/ACL RX buffers overflow ("dropping packet") and button CTKST
++// events get lost. App-level printf() (the [ptt] lines) is unaffected.
++// #define ENABLE_LOG_INFO
+ #define ENABLE_PRINTF_HEXDUMP
+ #define ENABLE_MODPLAYER
+ 
