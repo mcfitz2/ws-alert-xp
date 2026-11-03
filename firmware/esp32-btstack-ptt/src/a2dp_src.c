@@ -20,6 +20,9 @@
 #include "a2dp_src.h"
 #include "hci_dump.h"
 
+// 0 keeps the full HCI dump while streaming (choppy audio, full trace).
+#define MUTE_HCI_DUMP_WHILE_STREAMING 0
+
 #define NUM_CHANNELS     2
 #define AUDIO_TIMEOUT_MS 10
 #define SBC_STORAGE_SIZE 1030
@@ -231,7 +234,7 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         printf("[a2dp] STREAMING (MOD player)\n");
         // The HCI hex dump at 115200 baud throttles media to ~1 packet per
         // 220 ms (fire18: beeps), so mute it while streaming.
-        hci_dump_enable_packet_log(false);
+        hci_dump_enable_packet_log(!MUTE_HCI_DUMP_WHILE_STREAMING);
         break;
 
     case A2DP_SUBEVENT_STREAMING_CAN_SEND_MEDIA_PACKET_NOW:
