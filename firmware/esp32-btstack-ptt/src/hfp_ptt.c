@@ -159,16 +159,13 @@ static void handle_custom_at(const uint8_t *event)
         return;
     }
 
-    if (strstr(cmd, "CSRSF")) {
-        // The actual fire4 capture answered AT+CSRSF with the full line
-        // "+CSRSF: 1,1,1,1,1,0,3" then OK (--resp), NOT a bare OK. (The earlier
-        // "bare OK is the gate" note was a misread; the real driver was codec
-        // negotiation + the WS6's natural first-connect-drops-then-reconnects.)
-        hfp_ag_send_unsolicited_result_code(h, "+CSRSF: 1,1,1,1,1,0,3");
-        hfp_ag_send_command_result_code(h, true);
-        return;
-    }
-
+    // AT+CSRSF, and everything else, fall through to a bare OK. Confirmed from
+    // the full working HCI capture (ws-pair.btsnoop): the AG never emits a
+    // +CSRSF line. Connections that answered CSRSF/CTKST/VOLOUT with ERROR (or
+    // anything but OK) never armed the button; the ones that answered OK +
+    // real +VOLOUT:8, over a CVSD (+BCS:1) link, reached the probe and the
+    // button then emitted unsolicited +CTKST:0,1. fire4.txt's --resp +CSRSF
+    // line was a config that did NOT match the working capture.
     hfp_ag_send_command_result_code(h, true);  // plain OK
 }
 
