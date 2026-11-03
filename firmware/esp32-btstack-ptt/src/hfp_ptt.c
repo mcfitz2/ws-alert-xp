@@ -15,8 +15,10 @@
  * is up. The headset then enters radio mode and reports the Bluetooth button as
  * AT+CTKST=0,1 (press) / AT+CTKST=0,0 (release).
  *
- * Phase A (this file): PTT_GPIO drives the onboard LED so you can watch it
- * follow the headset button. No radio, no K1 plug.
+ * Phase A: LED_GPIO (onboard LED) follows the headset button.
+ * Phase B: RADIO_PTT_GPIO pulls the radio's K1 PTT line (3.5 mm sleeve, 3.3 V
+ * pull-up on the Baofeng UV-5G) to ground while the button is held. Wire it
+ * straight to the PTT wire and tie ESP32 GND to the K1 ground (2.5 mm sleeve).
  */
 
 #include <stdint.h>
@@ -28,9 +30,17 @@
 #include "sco_demo_util.h"
 #include "driver/gpio.h"
 
-// GPIO that follows the talk-key. GPIO2 is the onboard LED on most ESP32
-// devkits; repoint it at the radio PTT drive for Phase B.
-#define PTT_GPIO GPIO_NUM_2
+// Onboard LED on most ESP32 devkits; lit while keyed.
+#define LED_GPIO GPIO_NUM_2
+
+// Radio PTT drive, open-drain: low = keyed, high-Z = released, so the pin never
+// sources current into the radio. Not a strapping pin, and high-Z through
+// reset/boot, so the radio can't key while the ESP32 starts.
+#define RADIO_PTT_GPIO GPIO_NUM_4
+
+// Force PTT off after this long keyed, in case a release (AT+CTKST=0,0) is
+// lost. 0 disables.
+#define TX_TIMEOUT_MS 60000
 
 // Output volume reported to the headset's AT+VOLOUT? query.
 #define VOLOUT_LEVEL 8
@@ -53,6 +63,7 @@ static bd_addr_t peer_addr;
 
 static btstack_packet_callback_registration_t hci_event_callback_registration;
 static btstack_timer_source_t connect_timer;
+static btstack_timer_source_t tx_timeout_timer;
 static hci_con_handle_t acl_handle = HCI_CON_HANDLE_INVALID;
 static hci_con_handle_t sco_handle = HCI_CON_HANDLE_INVALID;
 static bool slc_connected = false;
@@ -129,10 +140,28 @@ static void sco_send_silence(hci_con_handle_t h)
     if ((++n % 250) == 0) printf("[ptt] sco tx %lu\n", (unsigned long)n);
 }
 
+static void set_ptt(bool on);
+
+static void tx_timeout_handler(btstack_timer_source_t *ts)
+{
+    (void)ts;
+    printf("[ptt] TX timeout (%d ms), forcing release\n", TX_TIMEOUT_MS);
+    set_ptt(false);
+}
+
 static void set_ptt(bool on)
 {
-    gpio_set_level(PTT_GPIO, on ? 1 : 0);
+    gpio_set_level(RADIO_PTT_GPIO, on ? 0 : 1);
+    gpio_set_level(LED_GPIO, on ? 1 : 0);
     printf("[ptt] PTT %s\n", on ? "KEYED" : "released");
+#if TX_TIMEOUT_MS
+    btstack_run_loop_remove_timer(&tx_timeout_timer);
+    if (on) {
+        btstack_run_loop_set_timer_handler(&tx_timeout_timer, &tx_timeout_handler);
+        btstack_run_loop_set_timer(&tx_timeout_timer, TX_TIMEOUT_MS);
+        btstack_run_loop_add_timer(&tx_timeout_timer);
+    }
+#endif
 }
 
 // Re-dial the headset until the SLC is up. The WS6 is always the acceptor (it
@@ -312,11 +341,20 @@ int btstack_main(int argc, const char *argv[])
     (void)argc;
     (void)argv;
 
-    gpio_config_t io = {
-        .pin_bit_mask = 1ULL << PTT_GPIO,
+    // Latch "released" (high-Z) before enabling the open-drain output so the
+    // PTT line never glitches low.
+    gpio_set_level(RADIO_PTT_GPIO, 1);
+    gpio_config_t ptt_io = {
+        .pin_bit_mask = 1ULL << RADIO_PTT_GPIO,
+        .mode = GPIO_MODE_OUTPUT_OD,
+    };
+    gpio_config(&ptt_io);
+
+    gpio_config_t led_io = {
+        .pin_bit_mask = 1ULL << LED_GPIO,
         .mode = GPIO_MODE_OUTPUT,
     };
-    gpio_config(&io);
+    gpio_config(&led_io);
     set_ptt(false);
 
     // NOTE: the plain-text HCI dump is intentionally left off. Once SCO audio
