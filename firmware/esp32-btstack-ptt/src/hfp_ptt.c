@@ -80,6 +80,13 @@
 // services: test whether the WS6 only takes A2DP from a phone-class device.
 #define CLASS_OF_DEVICE 0x5A020C
 
+// fire20-22: while A2DP streams the WS6 never arms the PTT button. Pause the
+// stream PAUSE_AT_MS after SLC up and resume it PAUSE_FOR_MS later, to see if
+// the button works with the stream suspended (squelch-gated A2DP).
+#define A2DP_PAUSE_TEST 1
+#define A2DP_PAUSE_AT_MS 20000
+#define A2DP_PAUSE_FOR_MS 30000
+
 // The WS Alert XP headset.
 static const char *PEER_ADDR_STR = "00:15:F3:25:7D:E8";
 static bd_addr_t peer_addr;
@@ -96,6 +103,25 @@ static bool slc_was_up = false;
 #if A2DP_TEST
 static btstack_timer_source_t a2dp_timer;
 static int a2dp_tries;
+
+#if A2DP_PAUSE_TEST
+static btstack_timer_source_t pause_timer;
+static bool pause_test_paused;
+
+static void pause_timer_handler(btstack_timer_source_t *ts)
+{
+    if (!pause_test_paused) {
+        printf("[ptt] TEST: pausing A2DP - press the button now\n");
+        a2dp_src_pause();
+        pause_test_paused = true;
+        btstack_run_loop_set_timer(ts, A2DP_PAUSE_FOR_MS);
+        btstack_run_loop_add_timer(ts);
+    } else {
+        printf("[ptt] TEST: resuming A2DP - press the button again\n");
+        a2dp_src_resume();
+    }
+}
+#endif
 
 // The WS6 refused the first AVDTP connect with L2CAP "no resources" (fire14),
 // so keep retrying for a while until a stream is up.
@@ -335,6 +361,13 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
 #if A2DP_TEST
                 btstack_run_loop_remove_timer(&a2dp_timer);
                 a2dp_tries = 0;
+#if A2DP_PAUSE_TEST
+                pause_test_paused = false;
+                btstack_run_loop_remove_timer(&pause_timer);
+                btstack_run_loop_set_timer_handler(&pause_timer, &pause_timer_handler);
+                btstack_run_loop_set_timer(&pause_timer, A2DP_PAUSE_AT_MS);
+                btstack_run_loop_add_timer(&pause_timer);
+#endif
                 btstack_run_loop_set_timer_handler(&a2dp_timer, &a2dp_timer_handler);
                 btstack_run_loop_set_timer(&a2dp_timer, A2DP_DELAY_MS);
                 btstack_run_loop_add_timer(&a2dp_timer);

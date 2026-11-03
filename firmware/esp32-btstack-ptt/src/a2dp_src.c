@@ -25,7 +25,7 @@
 #include "hci_dump.h"
 
 // 0 keeps the full HCI dump while streaming (choppy audio, full trace).
-#define MUTE_HCI_DUMP_WHILE_STREAMING 0
+#define MUTE_HCI_DUMP_WHILE_STREAMING 1
 
 #define NUM_CHANNELS     2
 #define AUDIO_TIMEOUT_MS 10
@@ -249,7 +249,7 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         break;
 
     case A2DP_SUBEVENT_STREAM_SUSPENDED:
-        printf("[a2dp] stream SUSPENDED by headset\n");
+        printf("[a2dp] stream SUSPENDED\n");
         hci_dump_enable_packet_log(true);
         timer_stop();
         break;
@@ -383,4 +383,16 @@ void a2dp_src_connect(bd_addr_t addr)
 bool a2dp_src_streaming(void)
 {
     return media.streaming;
+}
+
+void a2dp_src_pause(void)
+{
+    if (!media.a2dp_cid) return;
+    printf("[a2dp] pause -> status 0x%02x\n", a2dp_source_pause_stream(media.a2dp_cid, media.local_seid));
+}
+
+void a2dp_src_resume(void)
+{
+    if (!media.a2dp_cid) return;
+    printf("[a2dp] resume -> status 0x%02x\n", a2dp_source_start_stream(media.a2dp_cid, media.local_seid));
 }
