@@ -69,7 +69,7 @@
 // A2DP only: no HFP SDP record and no HFP dial, retry A2DP until streaming.
 // With a fresh BT address (main.c) this checks whether the WS6 takes A2DP
 // from a device it has never seen run the radio-mode handshake.
-#define A2DP_ONLY 1
+#define A2DP_ONLY 0
 // Open A2DP right at boot, before the HFP dial, instead of after SLC up.
 // fire14/15: with the SLC up the WS6 refuses AVDTP with L2CAP "no resources".
 #define A2DP_FIRST 1
