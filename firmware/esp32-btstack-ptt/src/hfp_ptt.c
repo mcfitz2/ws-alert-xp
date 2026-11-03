@@ -251,8 +251,10 @@ int btstack_main(int argc, const char *argv[])
 
     l2cap_init();
 
+    // No eSCO (HFP_AGSF_ESCO_S4): the ESP32's SCO-over-HCI path and the WS6
+    // (BRSF=665 advertises no eSCO S4) only do basic CVSD SCO/HV3. Advertising
+    // eSCO makes BTstack attempt an EV3 setting the controller rejects (0x0a).
     uint16_t supported_features =
-        (1 << HFP_AGSF_ESCO_S4) |
         (1 << HFP_AGSF_EXTENDED_ERROR_RESULT_CODES) |
         (1 << HFP_AGSF_IN_BAND_RING_TONE);
 
