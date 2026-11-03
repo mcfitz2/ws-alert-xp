@@ -82,10 +82,14 @@ static const char hfp_ag_service_name[] = "WS-PTT";
 // its trailing separator, so register the exact prefixes. The INFO log line
 // "command string '...' -> cmd id ..." prints every token the headset sends, so
 // unknown forms show up there and ERROR is returned until we handle them.
-enum { ID_VOLOUT = 1, ID_CTKST, ID_CSRSF };
+enum { ID_VOLOUT = 1, ID_CTKST, ID_CSRSF, ID_BLDN };
 static hfp_custom_at_command_t cmd_volout = { .command = "AT+VOLOUT?", .command_id = ID_VOLOUT };
 static hfp_custom_at_command_t cmd_ctkst  = { .command = "AT+CTKST=",  .command_id = ID_CTKST };
 static hfp_custom_at_command_t cmd_csrsf  = { .command = "AT+CSRSF=",  .command_id = ID_CSRSF };
+// The physical button is a standard HFP call button: over Bluetooth it emits
+// AT+BLDN (redial), never a PTT/CTKST key. Register it so our handler sees it
+// (BTstack otherwise consumes it) and we can toggle GPIO on press.
+static hfp_custom_at_command_t cmd_bldn   = { .command = "AT+BLDN",    .command_id = ID_BLDN };
 
 // Keep the SCO link alive by sending silence (zeros) on every can-send-now
 // slot. We only need the SCO link UP to gate the WS6's radio mode; we do not
@@ -142,6 +146,17 @@ static void handle_custom_at(const uint8_t *event)
         char resp[24];
         snprintf(resp, sizeof(resp), "+VOLOUT: %d", VOLOUT_LEVEL);
         hfp_ag_send_unsolicited_result_code(h, resp);
+        hfp_ag_send_command_result_code(h, true);
+        return;
+    }
+
+    if (strstr(cmd, "BLDN")) {
+        // The physical button. Toggle PTT GPIO so we can see it on the LED and
+        // characterize how reliably a press maps to one BLDN.
+        static int toggle = 0;
+        toggle = !toggle;
+        set_ptt(toggle);
+        printf("[ptt] *** BUTTON (AT+BLDN) *** -> GPIO %s\n", toggle ? "ON" : "OFF");
         hfp_ag_send_command_result_code(h, true);
         return;
     }
@@ -331,6 +346,7 @@ int btstack_main(int argc, const char *argv[])
     hfp_ag_register_custom_at_command(&cmd_volout);
     hfp_ag_register_custom_at_command(&cmd_ctkst);
     hfp_ag_register_custom_at_command(&cmd_csrsf);
+    hfp_ag_register_custom_at_command(&cmd_bldn);
 
     sdp_init();
     memset(hfp_service_buffer, 0, sizeof(hfp_service_buffer));
