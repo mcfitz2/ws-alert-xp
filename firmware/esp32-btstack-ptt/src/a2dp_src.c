@@ -18,6 +18,7 @@
 #include "btstack.h"
 #include "mods/mod.h"
 #include "a2dp_src.h"
+#include "hci_dump.h"
 
 #define NUM_CHANNELS     2
 #define AUDIO_TIMEOUT_MS 10
@@ -228,6 +229,9 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         start_generator();
         timer_start();
         printf("[a2dp] STREAMING (MOD player)\n");
+        // The HCI hex dump at 115200 baud throttles media to ~1 packet per
+        // 220 ms (fire18: beeps), so mute it while streaming.
+        hci_dump_enable_packet_log(false);
         break;
 
     case A2DP_SUBEVENT_STREAMING_CAN_SEND_MEDIA_PACKET_NOW:
@@ -236,11 +240,13 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
 
     case A2DP_SUBEVENT_STREAM_SUSPENDED:
         printf("[a2dp] stream SUSPENDED by headset\n");
+        hci_dump_enable_packet_log(true);
         timer_stop();
         break;
 
     case A2DP_SUBEVENT_STREAM_RELEASED:
         printf("[a2dp] stream released\n");
+        hci_dump_enable_packet_log(true);
         timer_stop();
         break;
 
