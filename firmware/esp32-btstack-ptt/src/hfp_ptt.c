@@ -19,6 +19,9 @@
  * Phase B: RADIO_PTT_GPIO pulls the radio's K1 PTT line (3.5 mm sleeve, 3.3 V
  * pull-up on the Baofeng UV-5G) to ground while the button is held. Wire it
  * straight to the PTT wire and tie ESP32 GND to the K1 ground (2.5 mm sleeve).
+ *
+ * A2DP_TEST: after the SLC is up, also open an A2DP (SBC) stream to the
+ * headset playing test music, to check A2DP and HFP radio mode coexist.
  */
 
 #include <stdint.h>
@@ -28,6 +31,7 @@
 #include "btstack.h"
 #include "hci_dump_embedded_stdout.h"
 #include "sco_demo_util.h"
+#include "a2dp_src.h"
 #include "driver/gpio.h"
 
 // Onboard LED on most ESP32 devkits; lit while keyed.
@@ -57,6 +61,10 @@
 // headset came back ~47s later, then ran the radio-mode probe.
 #define REDIAL_HOLDOFF_MS 60000
 
+// Open an A2DP stream this long after SLC up (after the radio-mode probe).
+#define A2DP_TEST 1
+#define A2DP_DELAY_MS 8000
+
 // The WS Alert XP headset.
 static const char *PEER_ADDR_STR = "00:15:F3:25:7D:E8";
 static bd_addr_t peer_addr;
@@ -64,6 +72,16 @@ static bd_addr_t peer_addr;
 static btstack_packet_callback_registration_t hci_event_callback_registration;
 static btstack_timer_source_t connect_timer;
 static btstack_timer_source_t tx_timeout_timer;
+#if A2DP_TEST
+static btstack_timer_source_t a2dp_timer;
+
+static void a2dp_timer_handler(btstack_timer_source_t *ts)
+{
+    (void) ts;
+    printf("[ptt] starting A2DP test stream\n");
+    a2dp_src_connect(peer_addr);
+}
+#endif
 static hci_con_handle_t acl_handle = HCI_CON_HANDLE_INVALID;
 static hci_con_handle_t sco_handle = HCI_CON_HANDLE_INVALID;
 static bool slc_connected = false;
@@ -277,6 +295,12 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
 #else
                 printf("[ptt] SLC up (no SCO, as in fire4)\n");
 #endif
+#if A2DP_TEST
+                btstack_run_loop_remove_timer(&a2dp_timer);
+                btstack_run_loop_set_timer_handler(&a2dp_timer, &a2dp_timer_handler);
+                btstack_run_loop_set_timer(&a2dp_timer, A2DP_DELAY_MS);
+                btstack_run_loop_add_timer(&a2dp_timer);
+#endif
                 break;
             }
             case HFP_SUBEVENT_SERVICE_LEVEL_CONNECTION_RELEASED:
@@ -419,6 +443,9 @@ int btstack_main(int argc, const char *argv[])
                                          rfcomm_channel_nr, hfp_ag_service_name, 0,
                                          supported_features, sizeof(codecs), codecs);
     sdp_register_service(hfp_service_buffer);
+#if A2DP_TEST
+    a2dp_src_init();
+#endif
 
     hci_event_callback_registration.callback = &packet_handler;
     hci_add_event_handler(&hci_event_callback_registration);
