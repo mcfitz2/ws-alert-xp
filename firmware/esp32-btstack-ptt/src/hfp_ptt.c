@@ -321,12 +321,14 @@ int btstack_main(int argc, const char *argv[])
     hfp_ag_init_hf_indicators(hf_indicators_nr, hf_indicators);
     hfp_ag_init_call_hold_services(call_hold_services_nr, call_hold_services);
 
-    // Force basic HV1/HV3 SCO. Under codec negotiation BTstack picks the eSCO
-    // S4 link setting (2EV3, latency 0x000c), which this ESP32 controller
-    // rejects with status 0x1E (invalid LMP params) and then does NOT fall back
-    // before the 20 s supervision timeout kills the ACL. HV3 comes up reliably
-    // and the button arming depends on the AT recipe, not the SCO packet type.
-    hfp_set_sco_packet_types(SCO_PACKET_TYPES_HV1 | SCO_PACKET_TYPES_HV3);
+    // Force eSCO EV3 (HFP link setting S1) only. Legacy HV3 SCO on this ESP32's
+    // SCO-over-HCI path reports tx/rx packet length 0 in Synchronous Connection
+    // Complete, so no audio actually flows and the ACL dies at the 20 s
+    // supervision timeout — and the WS6 never advances to the radio-mode probe
+    // without real audio. eSCO delivers proper length-30 CVSD frames. The S4
+    // setting (2EV3, latency 0x000c) is rejected by the controller with 0x1E
+    // under codec negotiation, so constrain to plain EV3 (S1, latency 0x0007).
+    hfp_set_sco_packet_types(SCO_PACKET_TYPES_EV3);
 
     // Answer the WS6's proprietary commands ourselves.
     hfp_ag_register_custom_at_command(&cmd_volout);
