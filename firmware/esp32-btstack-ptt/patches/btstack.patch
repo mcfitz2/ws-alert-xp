@@ -38,6 +38,22 @@ index 795d234..a3034ee 100644
  endif()
  
  list(APPEND EXTRA_COMPONENT_DIRS "${BTSTACK_ROOT}/port/esp32/components/")
+diff --git a/port/esp32/components/btstack/hci_transport_esp32_vhci.c b/port/esp32/components/btstack/hci_transport_esp32_vhci.c
+index 1384129..2dbdc2a 100644
+--- a/port/esp32/components/btstack/hci_transport_esp32_vhci.c
++++ b/port/esp32/components/btstack/hci_transport_esp32_vhci.c
+@@ -144,7 +144,10 @@ static int host_recv_pkt_cb(uint8_t *data, uint16_t len){
+     uint16_t space = btstack_ring_buffer_bytes_free(&hci_ringbuffer);
+     if (space < len){
+         xSemaphoreGive(ring_buffer_mutex);
+-        log_error("transport_recv_pkt_cb packet %u, space %u -> dropping packet", len, space);
++        // Silent drop. Logging here prints over the slow UART from the VHCI
++        // callback path, which stalls the run loop and causes *more* drops - a
++        // feedback loop that destabilises SCO and buries ACL (CTKST) events.
++        // Dropping an inbound SCO (mic) packet is harmless for PTT.
+         return 0;
+     }
+ 
 diff --git a/port/esp32/components/btstack_config/include/btstack_config.h b/port/esp32/components/btstack_config/include/btstack_config.h
 index 7a89cc8..4b2e97d 100644
 --- a/port/esp32/components/btstack_config/include/btstack_config.h
