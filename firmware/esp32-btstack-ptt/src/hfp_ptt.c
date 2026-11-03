@@ -39,6 +39,9 @@
 // link: hfp_ag.py never opens one. Set to 1 to open SCO once the SLC is up.
 #define OPEN_SCO 1
 
+// 1: answer AT+CSRSF with "+CSRSF: 1,1,1,1,1,0,3" then OK (fire4). 0: bare OK.
+#define CSRSF_FULL_REPLY 0
+
 // After an SLC drop, stop dialing this long so the headset can reconnect on
 // its own. In fire4 the first connection dropped right after AT+CSRSF and the
 // headset came back ~47s later, then ran the radio-mode probe.
@@ -195,7 +198,11 @@ static void handle_custom_at(const uint8_t *event)
         // fire4 (the run where the button emitted AT+CTKST=0,1) answered with
         // the full line, then OK. ws-pair.btsnoop predates fire4 and is not a
         // reference for this.
+        // With BTstack, only a bare OK has made the headset go on to the
+        // CTKST/VOLOUT probe (fire5); the full line leaves it idle.
+#if CSRSF_FULL_REPLY
         hfp_ag_send_unsolicited_result_code(h, "\r\n+CSRSF: 1,1,1,1,1,0,3\r\n");
+#endif
         hfp_ag_send_command_result_code(h, true);
         return;
     }
