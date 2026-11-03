@@ -27,6 +27,10 @@
 // 0 keeps the full HCI dump while streaming (choppy audio, full trace).
 #define MUTE_HCI_DUMP_WHILE_STREAMING 1
 
+// fire22/23: with AVRCP up the WS6 stops after AT+CSRSF and never arms the
+// PTT button; fire20 (no AVRCP) got the full probe. 0 = no AVRCP services.
+#define ENABLE_AVRCP 0
+
 #define NUM_CHANNELS     2
 #define AUDIO_TIMEOUT_MS 10
 #define SBC_STORAGE_SIZE 1030
@@ -353,6 +357,7 @@ void a2dp_src_init(void)
                                   AVDTP_SOURCE_FEATURE_MASK_PLAYER, NULL, NULL);
     sdp_register_service(sdp_a2dp_source_service_buffer);
 
+#if ENABLE_AVRCP
     avrcp_init();
     avrcp_register_packet_handler(&avrcp_packet_handler);
     avrcp_target_init();
@@ -371,6 +376,7 @@ void a2dp_src_init(void)
     avrcp_controller_create_sdp_record(sdp_avrcp_controller_service_buffer, sdp_create_service_record_handle(),
                                        AVRCP_FEATURE_MASK_CATEGORY_MONITOR_OR_AMPLIFIER, NULL, NULL);
     sdp_register_service(sdp_avrcp_controller_service_buffer);
+#endif
 }
 
 void a2dp_src_connect(bd_addr_t addr)
