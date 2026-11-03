@@ -53,6 +53,15 @@
 // link: hfp_ag.py never opens one. Set to 1 to open SCO once the SLC is up.
 #define OPEN_SCO 0
 
+// SCO audio test: SCO_AUDIO_DELAY_MS after SLC up (after the radio-mode
+// probe has armed the button), open SCO and stream sco_demo audio (MOD music,
+// see CMakeLists) to the headset. Logs the negotiated codec. With
+// OFFER_MSBC the AG offers mSBC too; the WS6 sends AT+BAC=1,2, so BTstack
+// picks mSBC (16 kHz, eSCO T1). 0 = CVSD only (8 kHz) for an A/B by ear.
+#define SCO_AUDIO_TEST 1
+#define SCO_AUDIO_DELAY_MS 10000
+#define OFFER_MSBC 1
+
 // 1: answer AT+CSRSF with "+CSRSF: 1,1,1,1,1,0,3" then OK (fire4). 0: bare OK.
 #define CSRSF_FULL_REPLY 0
 
@@ -139,9 +148,25 @@ static void a2dp_timer_handler(btstack_timer_source_t *ts)
 }
 #endif
 
-// Only offer CVSD (codec id 1): the WS6 radio-mode handshake used narrow-band
-// in the laptop capture, and Phase A does not bridge wide-band audio.
+// CVSD (codec id 1): the WS6 radio-mode handshake used narrow-band in the
+// laptop capture. mSBC (id 2) only for the SCO audio test.
+#if SCO_AUDIO_TEST && OFFER_MSBC
+static const uint8_t codecs[] = { HFP_CODEC_CVSD, HFP_CODEC_MSBC };
+#else
 static const uint8_t codecs[] = { HFP_CODEC_CVSD };
+#endif
+
+#if SCO_AUDIO_TEST
+static btstack_timer_source_t sco_timer;
+
+static void sco_timer_handler(btstack_timer_source_t *ts)
+{
+    (void)ts;
+    if (!slc_connected || sco_handle != HCI_CON_HANDLE_INVALID) return;
+    printf("[ptt] TEST: opening SCO audio (offer mSBC: %d)\n", OFFER_MSBC);
+    hfp_ag_establish_audio_connection(acl_handle);
+}
+#endif
 
 // Order and values match fire4's CIND exactly: service,call,callsetup,callheld,
 // signal,roam,battchg with CIND? = 1,0,0,0,5,0,5. The WS6 keys radio-mode logic
@@ -344,7 +369,11 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
             break;
 
         case HCI_EVENT_SCO_CAN_SEND_NOW:
+#if SCO_AUDIO_TEST
+            sco_demo_send(hci_event_sco_can_send_now_get_handle(event));
+#else
             sco_send_silence(hci_event_sco_can_send_now_get_handle(event));
+#endif
             break;
 
         case HCI_EVENT_HFP_META:
@@ -367,6 +396,12 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
                 hfp_ag_establish_audio_connection(acl_handle);
 #else
                 printf("[ptt] SLC up (no SCO, as in fire4)\n");
+#endif
+#if SCO_AUDIO_TEST
+                btstack_run_loop_remove_timer(&sco_timer);
+                btstack_run_loop_set_timer_handler(&sco_timer, &sco_timer_handler);
+                btstack_run_loop_set_timer(&sco_timer, SCO_AUDIO_DELAY_MS);
+                btstack_run_loop_add_timer(&sco_timer);
 #endif
 #if A2DP_TEST
                 btstack_run_loop_remove_timer(&a2dp_timer);
@@ -398,12 +433,22 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
                     break;
                 }
                 sco_handle = hfp_subevent_audio_connection_established_get_sco_handle(event);
-                hci_request_sco_can_send_now_event_for_con_handle(sco_handle);
+#if SCO_AUDIO_TEST
+                uint8_t codec = hfp_subevent_audio_connection_established_get_negotiated_codec(event);
+                printf("[ptt] SCO up (handle 0x%04x), codec %s\n", sco_handle,
+                       codec == HFP_CODEC_MSBC ? "mSBC 16 kHz" : "CVSD 8 kHz");
+                sco_demo_set_codec(codec);
+#else
                 printf("[ptt] SCO up (handle 0x%04x) - headset now in radio mode\n", sco_handle);
+#endif
+                hci_request_sco_can_send_now_event_for_con_handle(sco_handle);
                 break;
             }
             case HFP_SUBEVENT_AUDIO_CONNECTION_RELEASED:
                 printf("[ptt] SCO released\n");
+#if SCO_AUDIO_TEST
+                sco_demo_close();
+#endif
                 sco_handle = HCI_CON_HANDLE_INVALID;
                 break;
             case HFP_SUBEVENT_CUSTOM_AT_COMMAND:

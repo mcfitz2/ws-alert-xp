@@ -1,3 +1,19 @@
+diff --git a/example/sco_demo_util.c b/example/sco_demo_util.c
+index 9bad0b1..53c9cad 100644
+--- a/example/sco_demo_util.c
++++ b/example/sco_demo_util.c
+@@ -75,8 +75,10 @@
+ #define SCO_DEMO_MODE_MICROPHONE 1
+ #define SCO_DEMO_MODE_MODPLAYER  2
+ 
+-// SCO demo configuration
++// SCO demo configuration (overridable from the build, e.g. -DSCO_DEMO_MODE=2)
++#ifndef SCO_DEMO_MODE
+ #define SCO_DEMO_MODE               SCO_DEMO_MODE_SINE
++#endif
+ 
+ // number of sco packets until 'report' on console
+ #define SCO_REPORT_PERIOD           100
 diff --git a/platform/embedded/hci_dump_embedded_stdout.c b/platform/embedded/hci_dump_embedded_stdout.c
 index c8160d7..3c5b2ac 100644
 --- a/platform/embedded/hci_dump_embedded_stdout.c
