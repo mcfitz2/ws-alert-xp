@@ -66,6 +66,10 @@
 #define A2DP_DELAY_MS 8000
 #define A2DP_RETRY_MS 6000
 #define A2DP_MAX_TRIES 6
+// A2DP only: no HFP SDP record and no HFP dial, retry A2DP until streaming.
+// With a fresh BT address (main.c) this checks whether the WS6 takes A2DP
+// from a device it has never seen run the radio-mode handshake.
+#define A2DP_ONLY 1
 // Open A2DP right at boot, before the HFP dial, instead of after SLC up.
 // fire14/15: with the SLC up the WS6 refuses AVDTP with L2CAP "no resources".
 #define A2DP_FIRST 1
@@ -97,8 +101,8 @@ static int a2dp_tries;
 // so keep retrying for a while until a stream is up.
 static void a2dp_timer_handler(btstack_timer_source_t *ts)
 {
-    if (!slc_connected || a2dp_src_streaming()) return;
-    if (a2dp_tries++ >= A2DP_MAX_TRIES) {
+    if ((!A2DP_ONLY && !slc_connected) || a2dp_src_streaming()) return;
+    if (a2dp_tries++ >= A2DP_MAX_TRIES && !A2DP_ONLY) {
         printf("[ptt] A2DP: giving up after %d tries\n", A2DP_MAX_TRIES);
         return;
     }
@@ -286,7 +290,13 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
             if (btstack_event_state_get_state(event) == HCI_STATE_WORKING) {
                 printf("[ptt] BTstack up, ready as \"%s\"\n", hfp_ag_service_name);
                 connect_timer.process = &connect_timer_handler;
-#if A2DP_TEST && A2DP_FIRST
+#if A2DP_TEST && A2DP_ONLY
+                printf("[ptt] A2DP only: no HFP, dialing A2DP every %d ms\n", A2DP_RETRY_MS);
+                btstack_run_loop_set_timer_handler(&a2dp_timer, &a2dp_timer_handler);
+                btstack_run_loop_set_timer(&a2dp_timer, 2000);
+                btstack_run_loop_add_timer(&a2dp_timer);
+                break;
+#elif A2DP_TEST && A2DP_FIRST
                 printf("[ptt] A2DP first: dialing A2DP, HFP in %d ms\n", A2DP_FIRST_HFP_DELAY_MS);
                 a2dp_src_connect(peer_addr);
                 btstack_run_loop_set_timer(&connect_timer, A2DP_FIRST_HFP_DELAY_MS);
@@ -469,7 +479,9 @@ int btstack_main(int argc, const char *argv[])
     hfp_ag_create_sdp_record_with_codecs(hfp_service_buffer, sdp_create_service_record_handle(),
                                          rfcomm_channel_nr, hfp_ag_service_name, 0,
                                          supported_features, sizeof(codecs), codecs);
+#if !(A2DP_TEST && A2DP_ONLY)
     sdp_register_service(hfp_service_buffer);
+#endif
 #if A2DP_TEST
     a2dp_src_init();
 #endif
