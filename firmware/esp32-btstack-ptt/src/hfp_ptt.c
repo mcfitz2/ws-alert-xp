@@ -37,7 +37,7 @@
 
 // fire4 (the laptop run where the button emitted AT+CTKST=0,1) had no SCO
 // link: hfp_ag.py never opens one. Set to 1 to open SCO once the SLC is up.
-#define OPEN_SCO 1
+#define OPEN_SCO 0
 
 // 1: answer AT+CSRSF with "+CSRSF: 1,1,1,1,1,0,3" then OK (fire4). 0: bare OK.
 #define CSRSF_FULL_REPLY 0
