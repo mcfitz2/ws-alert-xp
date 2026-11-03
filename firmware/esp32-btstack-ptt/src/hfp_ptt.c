@@ -103,6 +103,9 @@ static void sco_send_silence(hci_con_handle_t h)
     hci_send_sco_packet_buffer(sco_packet_length);
 
     hci_request_sco_can_send_now_event_for_con_handle(h);
+
+    static uint32_t n = 0;
+    if ((++n % 250) == 0) printf("[ptt] sco tx %lu\n", (unsigned long)n);
 }
 
 static void set_ptt(bool on)
