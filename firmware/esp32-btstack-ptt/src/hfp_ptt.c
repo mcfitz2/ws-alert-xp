@@ -64,6 +64,8 @@
 // Open an A2DP stream this long after SLC up (after the radio-mode probe).
 #define A2DP_TEST 1
 #define A2DP_DELAY_MS 8000
+#define A2DP_RETRY_MS 6000
+#define A2DP_MAX_TRIES 6
 
 // The WS Alert XP headset.
 static const char *PEER_ADDR_STR = "00:15:F3:25:7D:E8";
@@ -72,21 +74,31 @@ static bd_addr_t peer_addr;
 static btstack_packet_callback_registration_t hci_event_callback_registration;
 static btstack_timer_source_t connect_timer;
 static btstack_timer_source_t tx_timeout_timer;
-#if A2DP_TEST
-static btstack_timer_source_t a2dp_timer;
-
-static void a2dp_timer_handler(btstack_timer_source_t *ts)
-{
-    (void) ts;
-    printf("[ptt] starting A2DP test stream\n");
-    a2dp_src_connect(peer_addr);
-}
-#endif
 static hci_con_handle_t acl_handle = HCI_CON_HANDLE_INVALID;
 static hci_con_handle_t sco_handle = HCI_CON_HANDLE_INVALID;
 static bool slc_connected = false;
 static uint32_t slc_released_ms = 0;
 static bool slc_was_up = false;
+
+#if A2DP_TEST
+static btstack_timer_source_t a2dp_timer;
+static int a2dp_tries;
+
+// The WS6 refused the first AVDTP connect with L2CAP "no resources" (fire14),
+// so keep retrying for a while until a stream is up.
+static void a2dp_timer_handler(btstack_timer_source_t *ts)
+{
+    if (!slc_connected || a2dp_src_streaming()) return;
+    if (a2dp_tries++ >= A2DP_MAX_TRIES) {
+        printf("[ptt] A2DP: giving up after %d tries\n", A2DP_MAX_TRIES);
+        return;
+    }
+    printf("[ptt] starting A2DP test stream (try %d)\n", a2dp_tries);
+    a2dp_src_connect(peer_addr);
+    btstack_run_loop_set_timer(ts, A2DP_RETRY_MS);
+    btstack_run_loop_add_timer(ts);
+}
+#endif
 
 // Only offer CVSD (codec id 1): the WS6 radio-mode handshake used narrow-band
 // in the laptop capture, and Phase A does not bridge wide-band audio.
@@ -297,6 +309,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
 #endif
 #if A2DP_TEST
                 btstack_run_loop_remove_timer(&a2dp_timer);
+                a2dp_tries = 0;
                 btstack_run_loop_set_timer_handler(&a2dp_timer, &a2dp_timer_handler);
                 btstack_run_loop_set_timer(&a2dp_timer, A2DP_DELAY_MS);
                 btstack_run_loop_add_timer(&a2dp_timer);
