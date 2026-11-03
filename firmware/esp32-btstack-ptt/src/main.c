@@ -49,10 +49,12 @@
 #include "esp_mac.h"
 
 // Optional Bluetooth address override (fresh identity for the WS6). The
-// factory BT address of this board is E8:6B:EA:E0:20:7E.
-#define BT_ADDR_OVERRIDE 0
+// factory BT address of this board is E8:6B:EA:E0:20:7E. :90 was the A2DP
+// test identity (fire18-24); :A0 is a clean one for HFP radio mode after the
+// factory address stopped getting the probe (fire28-32).
+#define BT_ADDR_OVERRIDE 1
 #if BT_ADDR_OVERRIDE
-static const uint8_t bt_addr_override[6] = { 0xE8, 0x6B, 0xEA, 0xE0, 0x20, 0x90 };
+static const uint8_t bt_addr_override[6] = { 0xE8, 0x6B, 0xEA, 0xE0, 0x20, 0xA0 };
 #endif
 
 extern int btstack_main(int argc, const char * argv[]);
