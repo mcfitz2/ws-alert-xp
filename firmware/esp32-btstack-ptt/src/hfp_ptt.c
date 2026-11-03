@@ -49,16 +49,20 @@ static bool slc_connected = false;
 // in the laptop capture, and Phase A does not bridge wide-band audio.
 static const uint8_t codecs[] = { HFP_CODEC_CVSD };
 
+// Order and values match fire4's CIND exactly: service,call,callsetup,callheld,
+// signal,roam,battchg with CIND? = 1,0,0,0,5,0,5. The WS6 keys radio-mode logic
+// on indicator positions (our old order put battchg at 4 / callheld at 7, which
+// gave AT+BIA=0,1,1,0,0,0,1,0 instead of fire4's 0,1,1,1,0,0,0,0).
 static int ag_indicators_nr = 7;
 static hfp_ag_indicator_t ag_indicators[] = {
     // index, name, min, max, status, mandatory, enabled, status changed
     {1, "service",   0, 1, 1, 0, 0, 0},
     {2, "call",      0, 1, 0, 1, 1, 0},
     {3, "callsetup", 0, 3, 0, 1, 1, 0},
-    {4, "battchg",   0, 5, 3, 0, 0, 0},
+    {4, "callheld",  0, 2, 0, 1, 1, 0},
     {5, "signal",    0, 5, 5, 0, 1, 0},
     {6, "roam",      0, 1, 0, 0, 1, 0},
-    {7, "callheld",  0, 2, 0, 1, 1, 0},
+    {7, "battchg",   0, 5, 5, 0, 0, 0},
 };
 
 static int hf_indicators_nr = 2;
