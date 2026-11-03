@@ -156,7 +156,9 @@ static void handle_custom_at(const uint8_t *event)
     }
 
     if (strstr(cmd, "CSRSF")) {
-        hfp_ag_send_unsolicited_result_code(h, "+CSRSF: 1,1,1,1,1,0,3");
+        // fire4 (the proven laptop capture) answered AT+CSRSF with a bare OK.
+        // Sending a "+CSRSF: ..." line back appears to stall the WS6 at the last
+        // SLC step so it never starts the radio-mode probe (VOLOUT?/CTKST=0,0).
         hfp_ag_send_command_result_code(h, true);
         return;
     }
