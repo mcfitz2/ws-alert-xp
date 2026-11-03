@@ -286,9 +286,16 @@ int btstack_main(int argc, const char *argv[])
     // No eSCO (HFP_AGSF_ESCO_S4): the ESP32's SCO-over-HCI path and the WS6
     // (BRSF=665 advertises no eSCO S4) only do basic CVSD SCO/HV3. Advertising
     // eSCO makes BTstack attempt an EV3 setting the controller rejects (0x0a).
+    // Advertise codec negotiation so the SLC runs the HF's AT+BAC / AG +BCS
+    // exchange and the SCO is opened as a *negotiated* CVSD link, the way the
+    // BlueZ laptop (fire4) did it. Without it BTstack force-opens a raw SCO that
+    // the WS6 accepts (no 2.1 s timeout) but does not fully treat as radio
+    // audio, so the PTT button never arms. We still offer only CVSD (codec 1),
+    // so negotiation resolves to CVSD and the HV3 SCO type is unchanged.
     uint16_t supported_features =
         (1 << HFP_AGSF_EXTENDED_ERROR_RESULT_CODES) |
-        (1 << HFP_AGSF_IN_BAND_RING_TONE);
+        (1 << HFP_AGSF_IN_BAND_RING_TONE) |
+        (1 << HFP_AGSF_CODEC_NEGOTIATION);
 
     rfcomm_init();
     hfp_ag_init(rfcomm_channel_nr);
