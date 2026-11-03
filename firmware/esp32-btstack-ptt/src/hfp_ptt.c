@@ -235,9 +235,12 @@ int btstack_main(int argc, const char *argv[])
     gpio_config(&io);
     set_ptt(false);
 
-    // Plain-text HCI/AT dump to stdout so we can read exactly what the headset
-    // sends during the handshake (CONFIG_BTSTACK_HCI_DUMP_STDOUT).
-    hci_dump_init(hci_dump_embedded_stdout_get_instance());
+    // NOTE: the plain-text HCI dump is intentionally left off. Once SCO audio
+    // flows it prints every 60-byte SCO packet over the 115200 serial line,
+    // starving the run loop so the SCO RX buffer overflows ("dropping packet")
+    // and real events (CTKST) get buried. Re-enable only for handshake
+    // debugging with no SCO:
+    //   hci_dump_init(hci_dump_embedded_stdout_get_instance());
 
     sco_demo_init();
 

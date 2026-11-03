@@ -25,3 +25,6 @@ CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
 # Plain-text HCI/AT dump to stdout so the WS6's mid-SLC command text is
 # readable in the serial log.
 CONFIG_BTSTACK_HCI_DUMP_STDOUT=y
+
+# Allow one SCO/eSCO link (default 0 => controller rejects SCO with 0x0a).
+CONFIG_BTDM_CTRL_BR_EDR_MAX_SYNC_CONN=1
