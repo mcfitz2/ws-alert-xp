@@ -158,8 +158,10 @@ static void handle_custom_at(const uint8_t *event)
     if (strstr(cmd, "VOLOUT")) {
         // Output-volume query. A real reply (not a bare OK) is required or the
         // radio-mode setup aborts.
-        char resp[24];
-        snprintf(resp, sizeof(resp), "+VOLOUT: %d", VOLOUT_LEVEL);
+        // BTstack sends custom strings raw and keeps the pointer until the
+        // RFCOMM slot frees up, so frame with CRLF and use static storage.
+        static char resp[24];
+        snprintf(resp, sizeof(resp), "\r\n+VOLOUT: %d\r\n", VOLOUT_LEVEL);
         hfp_ag_send_unsolicited_result_code(h, resp);
         hfp_ag_send_command_result_code(h, true);
         return;
@@ -182,8 +184,8 @@ static void handle_custom_at(const uint8_t *event)
         int a = 0, b = 0;
         sscanf(p + 6, "%d,%d", &a, &b);
         set_ptt(b != 0);
-        char resp[24];
-        snprintf(resp, sizeof(resp), "+CTKST=%d,%d", a, b);  // echo, as the real AG does
+        static char resp[24];
+        snprintf(resp, sizeof(resp), "\r\n+CTKST=%d,%d\r\n", a, b);  // echo, as the real AG does
         hfp_ag_send_unsolicited_result_code(h, resp);
         hfp_ag_send_command_result_code(h, true);
         return;
@@ -193,7 +195,7 @@ static void handle_custom_at(const uint8_t *event)
         // fire4 (the run where the button emitted AT+CTKST=0,1) answered with
         // the full line, then OK. ws-pair.btsnoop predates fire4 and is not a
         // reference for this.
-        hfp_ag_send_unsolicited_result_code(h, "+CSRSF: 1,1,1,1,1,0,3");
+        hfp_ag_send_unsolicited_result_code(h, "\r\n+CSRSF: 1,1,1,1,1,0,3\r\n");
         hfp_ag_send_command_result_code(h, true);
         return;
     }
