@@ -7,8 +7,12 @@
  * of 8 kHz SCO.
  *
  * Streams BTstack's built-in MOD player (music makes codec quality audible)
- * as SBC. Trimmed from btstack/example/a2dp_source_demo.c: no AVRCP, no
- * inquiry, no stdin; one stream to a known address.
+ * as SBC. Trimmed from btstack/example/a2dp_source_demo.c: no inquiry, no
+ * stdin; one stream to a known address.
+ *
+ * AVRCP target + controller are registered because, once A2DP streams, the
+ * WS6 opens AVCTP (PSM 0x17) and, when refused, drops button presses
+ * (fire21). Every AVRCP operation the headset sends is logged.
  */
 
 #include <stdint.h>
@@ -37,6 +41,9 @@ static uint8_t media_sbc_codec_capabilities[] = {
 };
 static uint8_t media_sbc_codec_configuration[4];
 static uint8_t sdp_a2dp_source_service_buffer[150];
+static uint8_t sdp_avrcp_target_service_buffer[150];
+static uint8_t sdp_avrcp_controller_service_buffer[200];
+static uint16_t avrcp_cid;
 
 static struct {
     uint16_t a2dp_cid;
@@ -264,6 +271,69 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
     }
 }
 
+static void avrcp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size)
+{
+    UNUSED(channel);
+    UNUSED(size);
+    if (packet_type != HCI_EVENT_PACKET) return;
+    if (hci_event_packet_get_type(packet) != HCI_EVENT_AVRCP_META) return;
+
+    switch (hci_event_avrcp_meta_get_subevent_code(packet)) {
+    case AVRCP_SUBEVENT_CONNECTION_ESTABLISHED: {
+        uint8_t status = avrcp_subevent_connection_established_get_status(packet);
+        if (status != ERROR_CODE_SUCCESS) {
+            printf("[avrcp] connect failed, status 0x%02x\n", status);
+            return;
+        }
+        avrcp_cid = avrcp_subevent_connection_established_get_avrcp_cid(packet);
+        printf("[avrcp] connected, cid 0x%02x\n", avrcp_cid);
+        avrcp_target_support_event(avrcp_cid, AVRCP_NOTIFICATION_EVENT_PLAYBACK_STATUS_CHANGED);
+        avrcp_target_set_playback_status(avrcp_cid, AVRCP_PLAYBACK_STATUS_PLAYING);
+        break;
+    }
+    case AVRCP_SUBEVENT_CONNECTION_RELEASED:
+        printf("[avrcp] released\n");
+        avrcp_cid = 0;
+        break;
+    default:
+        break;
+    }
+}
+
+static void avrcp_target_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size)
+{
+    UNUSED(channel);
+    UNUSED(size);
+    if (packet_type != HCI_EVENT_PACKET) return;
+    if (hci_event_packet_get_type(packet) != HCI_EVENT_AVRCP_META) return;
+
+    switch (hci_event_avrcp_meta_get_subevent_code(packet)) {
+    case AVRCP_SUBEVENT_PLAY_STATUS_QUERY:
+        avrcp_target_play_status(avrcp_cid, 0xFFFFFFFF, 0xFFFFFFFF, AVRCP_PLAYBACK_STATUS_PLAYING);
+        break;
+    case AVRCP_SUBEVENT_OPERATION: {
+        // Log only: keep the stream playing whatever the headset asks for.
+        avrcp_operation_id_t op = (avrcp_operation_id_t) avrcp_subevent_operation_get_operation_id(packet);
+        bool pressed = avrcp_subevent_operation_get_button_pressed(packet) > 0;
+        printf("[avrcp] operation %s (0x%02x) %s\n", avrcp_operation2str(op), op,
+               pressed ? "PRESS" : "RELEASE");
+        break;
+    }
+    default:
+        printf("[avrcp] target subevent 0x%02x\n", hci_event_avrcp_meta_get_subevent_code(packet));
+        break;
+    }
+}
+
+static void avrcp_controller_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *packet, uint16_t size)
+{
+    UNUSED(channel);
+    UNUSED(size);
+    if (packet_type != HCI_EVENT_PACKET) return;
+    if (hci_event_packet_get_type(packet) != HCI_EVENT_AVRCP_META) return;
+    printf("[avrcp] controller subevent 0x%02x\n", hci_event_avrcp_meta_get_subevent_code(packet));
+}
+
 void a2dp_src_init(void)
 {
     a2dp_source_init();
@@ -282,6 +352,25 @@ void a2dp_src_init(void)
     a2dp_source_create_sdp_record(sdp_a2dp_source_service_buffer, sdp_create_service_record_handle(),
                                   AVDTP_SOURCE_FEATURE_MASK_PLAYER, NULL, NULL);
     sdp_register_service(sdp_a2dp_source_service_buffer);
+
+    avrcp_init();
+    avrcp_register_packet_handler(&avrcp_packet_handler);
+    avrcp_target_init();
+    avrcp_target_register_packet_handler(&avrcp_target_packet_handler);
+    avrcp_controller_init();
+    avrcp_controller_register_packet_handler(&avrcp_controller_packet_handler);
+
+    // Target: we receive category 1 commands (play/pause) from the headset.
+    memset(sdp_avrcp_target_service_buffer, 0, sizeof(sdp_avrcp_target_service_buffer));
+    avrcp_target_create_sdp_record(sdp_avrcp_target_service_buffer, sdp_create_service_record_handle(),
+                                   AVRCP_FEATURE_MASK_CATEGORY_PLAYER_OR_RECORDER, NULL, NULL);
+    sdp_register_service(sdp_avrcp_target_service_buffer);
+
+    // Controller: we may send category 2 commands (volume) to the headset.
+    memset(sdp_avrcp_controller_service_buffer, 0, sizeof(sdp_avrcp_controller_service_buffer));
+    avrcp_controller_create_sdp_record(sdp_avrcp_controller_service_buffer, sdp_create_service_record_handle(),
+                                       AVRCP_FEATURE_MASK_CATEGORY_MONITOR_OR_AMPLIFIER, NULL, NULL);
+    sdp_register_service(sdp_avrcp_controller_service_buffer);
 }
 
 void a2dp_src_connect(bd_addr_t addr)
