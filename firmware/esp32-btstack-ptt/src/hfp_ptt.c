@@ -333,6 +333,16 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
             }
             break;
 
+        case HCI_EVENT_AUTHENTICATION_COMPLETE:
+            // Headset forgot our pairing (e.g. evicted by a newer pairing):
+            // drop the stale key so the next dial re-pairs from scratch.
+            if (hci_event_authentication_complete_get_status(event) != ERROR_CODE_SUCCESS) {
+                printf("[ptt] auth failed, status 0x%02x - dropping link key\n",
+                       hci_event_authentication_complete_get_status(event));
+                gap_drop_link_key_for_bd_addr(peer_addr);
+            }
+            break;
+
         case HCI_EVENT_SCO_CAN_SEND_NOW:
             sco_send_silence(hci_event_sco_can_send_now_get_handle(event));
             break;
