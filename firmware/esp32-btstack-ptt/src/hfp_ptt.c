@@ -161,13 +161,23 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
 
         case HCI_EVENT_HFP_META:
             switch (hci_event_hfp_meta_get_subevent_code(event)) {
-            case HFP_SUBEVENT_SERVICE_LEVEL_CONNECTION_ESTABLISHED:
+            case HFP_SUBEVENT_SERVICE_LEVEL_CONNECTION_ESTABLISHED: {
+                uint8_t st = hfp_subevent_service_level_connection_established_get_status(event);
+                if (st != ERROR_CODE_SUCCESS) {
+                    // Page/SDP/SLC failed (e.g. status 0x04 page timeout). Stay
+                    // not-connected so the dial timer keeps retrying.
+                    printf("[ptt] SLC failed, status 0x%02x - will re-dial\n", st);
+                    slc_connected = false;
+                    acl_handle = HCI_CON_HANDLE_INVALID;
+                    break;
+                }
                 acl_handle = hfp_subevent_service_level_connection_established_get_acl_handle(event);
                 slc_connected = true;
                 printf("[ptt] SLC up, opening SCO audio (the radio-mode gate)\n");
                 // The gate: open SCO as soon as the SLC is up.
                 hfp_ag_establish_audio_connection(acl_handle);
                 break;
+            }
             case HFP_SUBEVENT_SERVICE_LEVEL_CONNECTION_RELEASED:
                 printf("[ptt] SLC released\n");
                 slc_connected = false;
