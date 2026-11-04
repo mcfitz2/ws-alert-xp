@@ -64,6 +64,8 @@
 // picks mSBC (16 kHz, eSCO T1). 0 = CVSD only (8 kHz) for an A/B by ear.
 #define SCO_AUDIO_TEST 1
 #define SCO_AUDIO_DELAY_MS 2000
+// 1: answer a CTKST=0,1 that arrives inside the probe with +CTKST=0,0.
+#define PROBE_REPLY_RELEASED 1
 #define OFFER_MSBC 1
 
 // 1: answer AT+CSRSF with "+CSRSF: 1,1,1,1,1,0,3" then OK (fire4). 0: bare OK.
@@ -163,7 +165,7 @@ static const uint8_t codecs[] = { HFP_CODEC_CVSD };
 #if SCO_AUDIO_TEST
 static btstack_timer_source_t sco_timer;
 // Radio-mode probe progress: 0 = waiting for VOLOUT?, 1..2 = VOLOUT? seen and
-// that many CTKST=0,0 since, 3 = complete, -1 = interrupted by a key press.
+// that many CTKST since, 3 = complete.
 static int probe_step;
 
 static void sco_timer_handler(btstack_timer_source_t *ts)
@@ -316,16 +318,23 @@ static void handle_custom_at(const uint8_t *event)
         // Talk-key state: +CTKST=<a>,<b>. b is the key state (1 pressed).
         int a = 0, b = 0;
         sscanf(p + 6, "%d,%d", &a, &b);
-        set_ptt(b != 0);
+        // fire33/35/36: on a fresh pairing the probe's third step is CTKST=0,1
+        // (no button touched), and the button stays dead after it. Answer that
+        // one with +CTKST=0,0, as if the AG reports the key released, and don't
+        // key the radio for it.
+        bool in_probe = probe_step >= 1 && probe_step <= 2;
+        int echo_b = (in_probe && PROBE_REPLY_RELEASED) ? 0 : b;
+        if (!in_probe) set_ptt(b != 0);
         static char resp[24];
-        snprintf(resp, sizeof(resp), "\r\n+CTKST=%d,%d\r\n", a, b);  // echo, as the real AG does
+        snprintf(resp, sizeof(resp), "\r\n+CTKST=%d,%d\r\n", a, echo_b);  // echo, as the real AG does
         hfp_ag_send_unsolicited_result_code(h, resp);
         hfp_ag_send_command_result_code(h, true);
         if (probe_step >= 1 && probe_step <= 2) {
             if (b != 0) {
-                printf("[ptt] key pressed mid-probe - probe interrupted, no SCO\n");
-                probe_step = -1;
-            } else if (++probe_step == 3) {
+                printf("[ptt] CTKST=0,1 in probe slot %d - replied +CTKST=0,%d\n",
+                       probe_step, echo_b);
+            }
+            if (++probe_step == 3) {
                 printf("[ptt] radio-mode probe complete\n");
 #if SCO_AUDIO_TEST
                 btstack_run_loop_remove_timer(&sco_timer);
