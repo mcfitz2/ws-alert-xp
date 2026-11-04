@@ -50,9 +50,11 @@
 // Output volume reported to the headset's AT+VOLOUT? query.
 #define VOLOUT_LEVEL 8
 
-// fire4 (the laptop run where the button emitted AT+CTKST=0,1) had no SCO
-// link: hfp_ag.py never opens one. Set to 1 to open SCO once the SLC is up.
-#define OPEN_SCO 0
+// 1: open SCO the moment the SLC is up, before the radio module's setup burst.
+// Every first session that typed the ESP32 as a PTT device (fire5, fire10,
+// fire11; laptop fire4) had audio up before AT+CSRSF, and the probe then ran
+// 0,0 V 0,0 0,0. Opening it later (fire41: inside the 0,1 window) is too late.
+#define OPEN_SCO 1
 
 // SCO audio test: SCO_AUDIO_DELAY_MS after the radio-mode probe completes
 // (AT+VOLOUT? then two AT+CTKST=0,0), open SCO and stream the embedded
@@ -71,8 +73,8 @@
 // 0,1 starts a ~2.1 s window that waits for an audio link and falls back to
 // phone mode (CTKST=0,0, device typed as phone) when none shows up. fire40
 // answered the post-SLC AT+CIND=? and still timed out without SCO.
-#define SCO_ON_PROBE_KEY 1
-#define OFFER_MSBC 1
+#define SCO_ON_PROBE_KEY 0
+#define OFFER_MSBC 0  // fire5/10/11 ran CVSD (AT+BCS=1)
 
 // 1: answer AT+CSRSF with "+CSRSF: 1,1,1,1,1,0,3" then OK (fire4). 0: bare OK.
 #define CSRSF_FULL_REPLY 0
