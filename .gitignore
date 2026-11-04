@@ -11,13 +11,7 @@ managed_components/
 # firmware/esp32-btstack-ptt/patches/btstack.patch (tools/setup_btstack.sh).
 firmware/esp32-btstack-ptt/btstack/
 
-# KiCad local state
-.history/
-*-backups/
-*.lck
-~*.lck
-fp-info-cache
-*.kicad_prl
-
-# Raw 600 dpi flatbed scans (42 MB); outlines/ holds what was traced from them.
-scans/*.tiff
+# Vendor manuals and phone photos kept locally only (copyright / photo
+# location metadata).
+*.pdf
+PXL_*.jpg
