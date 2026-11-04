@@ -74,7 +74,7 @@
 // phone mode (CTKST=0,0, device typed as phone) when none shows up. fire40
 // answered the post-SLC AT+CIND=? and still timed out without SCO.
 #define SCO_ON_PROBE_KEY 0
-#define OFFER_MSBC 0  // fire5/10/11 ran CVSD (AT+BCS=1)
+#define OFFER_MSBC 1  // fire5/10/11/42 ran CVSD; fire43 tests mSBC
 
 // 1: answer AT+CSRSF with "+CSRSF: 1,1,1,1,1,0,3" then OK (fire4). 0: bare OK.
 #define CSRSF_FULL_REPLY 0

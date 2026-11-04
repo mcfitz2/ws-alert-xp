@@ -52,10 +52,10 @@
 // factory BT address of this board is E8:6B:EA:E0:20:7E. The WS6 types a
 // device on its first session: if the radio probe times out (CTKST=0,1 ->
 // 0,0) it is stored as a phone and never probed again. :B0-:10 went that way;
-// :20 is fresh.
+// :20 is typed PTT (fire42, CVSD). :30 is fresh.
 #define BT_ADDR_OVERRIDE 1
 #if BT_ADDR_OVERRIDE
-static const uint8_t bt_addr_override[6] = { 0xE8, 0x6B, 0xEA, 0xE0, 0x20, 0x20 };
+static const uint8_t bt_addr_override[6] = { 0xE8, 0x6B, 0xEA, 0xE0, 0x20, 0x30 };
 #endif
 
 extern int btstack_main(int argc, const char * argv[]);
