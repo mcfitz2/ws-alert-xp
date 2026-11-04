@@ -65,7 +65,13 @@
 #define SCO_AUDIO_TEST 1
 #define SCO_AUDIO_DELAY_MS 2000
 // 1: answer a CTKST=0,1 that arrives inside the probe with +CTKST=0,0.
-#define PROBE_REPLY_RELEASED 1
+// 0: plain echo, as in fire4.
+#define PROBE_REPLY_RELEASED 0
+// 1: open SCO as soon as the probe sends CTKST=0,1. docs/radio-ptt.md: that
+// 0,1 starts a ~2.1 s window that waits for an audio link and falls back to
+// phone mode (CTKST=0,0, device typed as phone) when none shows up. fire40
+// answered the post-SLC AT+CIND=? and still timed out without SCO.
+#define SCO_ON_PROBE_KEY 1
 #define OFFER_MSBC 1
 
 // 1: answer AT+CSRSF with "+CSRSF: 1,1,1,1,1,0,3" then OK (fire4). 0: bare OK.
@@ -333,6 +339,9 @@ static void handle_custom_at(const uint8_t *event)
             if (b != 0) {
                 printf("[ptt] CTKST=0,1 in probe slot %d - replied +CTKST=0,%d\n",
                        probe_step, echo_b);
+#if SCO_AUDIO_TEST && SCO_ON_PROBE_KEY
+                sco_timer_handler(NULL);
+#endif
             }
             if (++probe_step == 3) {
                 printf("[ptt] radio-mode probe complete\n");
