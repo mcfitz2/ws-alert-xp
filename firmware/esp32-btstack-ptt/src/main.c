@@ -50,10 +50,10 @@
 
 // Optional Bluetooth address override (fresh identity for the WS6). The
 // factory BT address of this board is E8:6B:EA:E0:20:7E. :B0 (fire35) got
-// one probe, then none; :C0 is fresh for the clean-first-session test.
+// one probe, then none; :C0 (fire36) likewise. :D0 is fresh for fire37.
 #define BT_ADDR_OVERRIDE 1
 #if BT_ADDR_OVERRIDE
-static const uint8_t bt_addr_override[6] = { 0xE8, 0x6B, 0xEA, 0xE0, 0x20, 0xC0 };
+static const uint8_t bt_addr_override[6] = { 0xE8, 0x6B, 0xEA, 0xE0, 0x20, 0xD0 };
 #endif
 
 extern int btstack_main(int argc, const char * argv[]);
