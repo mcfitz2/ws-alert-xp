@@ -120,3 +120,54 @@ index 7a89cc8..47c9ae2 100644
  // mainly needed for AVRCP Browsing, can be removed otherwise to reduce code size
  #define ENABLE_L2CAP_ENHANCED_RETRANSMISSION_MODE
  
+diff --git a/src/classic/hfp.h b/src/classic/hfp.h
+index 18e169d..b26dc3b 100644
+--- a/src/classic/hfp.h
++++ b/src/classic/hfp.h
+@@ -663,6 +663,7 @@ typedef struct hfp_connection {
+ 
+     uint8_t send_phone_number_for_voice_tag;
+     uint8_t send_ag_status_indicators;
++    uint8_t send_ag_indicators;         // AT+CIND=? after SLC (WS6 radio module)
+     uint8_t send_ag_indicators_segment;
+     uint8_t send_response_and_hold_status;  // 0 - don't send. BRTH:0 == 1, ..
+ 
+diff --git a/src/classic/hfp_ag.c b/src/classic/hfp_ag.c
+index 7aad458..e906545 100644
+--- a/src/classic/hfp_ag.c
++++ b/src/classic/hfp_ag.c
+@@ -2448,6 +2448,19 @@ static int hfp_ag_send_commands(hfp_connection_t *hfp_connection){
+         return 1;
+     }
+     
++    if (hfp_connection->send_ag_indicators){
++        int num_segments = hfp_ag_get_ag_indicators_cmd_num_segments(hfp_connection);
++        // clear first: rfcomm_send_prepared can recurse into this function
++        hfp_connection->send_ag_indicators = 0;
++        hfp_ag_send_retrieve_indicators_cmd_via_generator(hfp_connection->rfcomm_cid, hfp_connection, &hfp_connection->send_ag_indicators_segment);
++        if (hfp_connection->send_ag_indicators_segment < num_segments){
++            hfp_connection->send_ag_indicators = 1;
++        } else {
++            hfp_connection->send_ag_indicators_segment = 0;
++        }
++        return 1;
++    }
++
+     if (hfp_connection->send_ag_status_indicators){
+         hfp_connection->send_ag_status_indicators = 0;
+         hfp_ag_send_retrieve_indicators_status_cmd(hfp_connection->rfcomm_cid);
+@@ -2679,6 +2692,14 @@ static void hfp_ag_handle_rfcomm_data(hfp_connection_t * hfp_connection, uint8_t
+                     hfp_ag_queue_error(hfp_connection);
+                 }
+                 break;
++            case HFP_CMD_RETRIEVE_AG_INDICATORS:
++                // expected by SLC state machine; the WS6's radio module sends
++                // its own AT+CIND=? after the SLC and stalls 5 s if unanswered
++                if (hfp_connection->state < HFP_SERVICE_LEVEL_CONNECTION_ESTABLISHED) break;
++                hfp_connection->command = HFP_CMD_NONE;
++                hfp_connection->send_ag_indicators_segment = 0;
++                hfp_connection->send_ag_indicators = 1;
++                break;
+             case HFP_CMD_RETRIEVE_AG_INDICATORS_STATUS:
+                 // expected by SLC state machine
+                 if (hfp_connection->state < HFP_SERVICE_LEVEL_CONNECTION_ESTABLISHED) break;
