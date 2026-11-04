@@ -394,7 +394,7 @@ unchanged; only the stack that carries it must let the app answer every line.
 ### BTstack implementation (`firmware/esp32-btstack-ptt/`): Phase A works
 
 The same classic ESP32 running BlueKitchen BTstack's HFP-AG completes the SLC,
-the headset runs its radio-mode probe, and the button drives GPIO2
+the headset runs its radio-mode probe, and the button drives GPIO4
 (`AT+CTKST=0,1` → keyed, `AT+CTKST=0,0` → released; every press paired with
 a release over dozens of presses). What it takes:
 
@@ -410,11 +410,45 @@ a release over dozens of presses). What it takes:
   line shut the headset off.
 
 With that, a normal power-on reconnects and runs the probe with no re-pairing.
-**SCO is not needed for PTT**: with `OPEN_SCO 0` the probe and the button work
-exactly the same. Step 3 of the recipe above came from the BlueZ AG and does
-not hold here. SCO is only needed for the Phase C audio bridge, and then it
-must be eSCO EV3 (`SCO_PACKET_TYPES_EV3`); HV3 negotiates a zero packet
+SCO must be eSCO EV3 (`SCO_PACKET_TYPES_EV3`); HV3 negotiates a zero packet
 length and the link dies at 20 s.
+
+#### The headset types each AG on its first session (fire28-fire42)
+
+An earlier version of this section said "SCO is not needed for PTT". That
+only holds for an AG the headset has *already* accepted as a radio. The XP
+firmware keeps a per-device type (UNKNOWN / PHONE / PTT, see the XP+ notes
+above) and sets it during that device's first session:
+
+- **SCO up at SLC up** (`OPEN_SCO 1`, before the radio module sends
+  `AT+CSRSF`): the probe runs `CTKST=0,0 → VOLOUT? → CTKST=0,0 → CTKST=0,0`
+  and the device is stored as PTT. On later sessions the probe passes with or
+  without SCO, and the button sends `CTKST=0,1` / `0,0`.
+- **No SCO yet:** the probe takes the abort path
+  (`VOLOUT? → CTKST=0,1 → (2.1 s) → CTKST=0,0`) and the device is stored as
+  PHONE. From then on that address gets no probe at all (setup stops after
+  `AT+CSRSF`) and the button sends nothing.
+
+What does **not** recover a PHONE-typed address: headset power cycles, battery
+out, erasing the ESP32's NVS (fresh SSP keys on the same address), the
+headset's menu factory reset, or answering the probe's `0,1` with `+CTKST=0,0`.
+Opening SCO inside the 2.1 s window (fire41) or after the probe is also too
+late. The only reset found is a new Bluetooth address: `BT_ADDR_OVERRIDE` in
+`src/main.c`, with the headset in pairing mode.
+
+fire28 was misread at the time as "SCO before the probe kills radio mode". In
+fact that address was already typed PHONE (the radio module never sent its
+`AT+CIND=?`), so SCO had nothing to do with it. That misreading moved SCO
+after the probe and typed every fresh address after it as a phone.
+
+The BTstack patch also answers the radio module's own post-SLC `AT+CIND=?`
+(stock BTstack ignores it after the SLC, which costs a 5 s stall before
+`CIND?` / `CMER=3,0,0,1`). This is correct but not sufficient on its own;
+fire40 answered it and was still typed PHONE without SCO.
+
+Working first-session recipe (fire42, commit 22e5872): fresh address, NVS
+erased, headset in pairing mode, `OPEN_SCO 1`, CVSD. The commentary clip
+plays over SCO, the button keys GPIO4, and both survive a headset power cycle.
 
 ## Radio side: Baofeng UV-5G (K1 connector)
 
