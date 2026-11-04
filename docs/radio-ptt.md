@@ -449,6 +449,10 @@ fire40 answered it and was still typed PHONE without SCO.
 Working first-session recipe (fire42, commit 22e5872): fresh address, NVS
 erased, headset in pairing mode, `OPEN_SCO 1`, CVSD. The commentary clip
 plays over SCO, the button keys GPIO4, and both survive a headset power cycle.
+fire43 (commit 244dd3e, address `:30`) repeated it with `OFFER_MSBC 1`: mSBC
+16 kHz eSCO at SLC up passes the first-session probe the same way, PTT keys
+the radio and mutes the clip, and it survives a power cycle. mSBC is the
+default.
 
 ## Radio side: Baofeng UV-5G (K1 connector)
 
