@@ -341,7 +341,7 @@ A small BT-HFP + K1 dongle (ESP32/nRF-class radio with an HFP-AG stack, or a
 headset-SoC module) replaces the FL6077-WS5. Component sourcing per the
 project's JLC/DigiKey rule; this is radio-side, not a headset board.
 
-### ESP32 implementation (`firmware/esp32-ptt/`)
+### ESP32 implementation, first try: Bluedroid (removed)
 
 A classic ESP32 (BR/EDR — ESP32-D0WD etc.; **not** S2/S3/C3/C6, which have no
 Bluetooth Classic) can run the whole AG side with ESP-IDF's Bluedroid HFP-AG:
@@ -357,7 +357,8 @@ Bluetooth Classic) can run the whole AG side with ESP-IDF's Bluedroid HFP-AG:
 Phases: **A** mirror the talk-key to the onboard LED (no radio, no K1 plug —
 protocol proof on bare hardware); **B** point the GPIO at a transistor across
 the radio's K1 PTT line; **C** add an I2S/PCM codec to bridge SCO audio to the
-radio's mic/speaker. Built with PlatformIO (`pio run -t upload`).
+radio's mic/speaker. The Bluedroid firmware was removed from the tree once
+BTstack worked; the findings below are why.
 
 #### Bring-up result: Bluedroid stalls the SLC the WS6 needs
 
@@ -391,7 +392,7 @@ hooks and runs on the classic ESP32) is the natural port, or patch Bluedroid's
 (answer `AT+VOLOUT?`, echo `AT+CTKST=`, open CVSD SCO right after SLC) is
 unchanged; only the stack that carries it must let the app answer every line.
 
-### BTstack implementation (`firmware/esp32-btstack-ptt/`): Phase A works
+### BTstack implementation (`ws6_ptt/`): Phase A works
 
 The same classic ESP32 running BlueKitchen BTstack's HFP-AG completes the SLC,
 the headset runs its radio-mode probe, and the button drives GPIO4
@@ -434,7 +435,7 @@ out, erasing the ESP32's NVS (fresh SSP keys on the same address), the
 headset's menu factory reset, or answering the probe's `0,1` with `+CTKST=0,0`.
 Opening SCO inside the 2.1 s window (fire41) or after the probe is also too
 late. The only reset found is a new Bluetooth address: `BT_ADDR_OVERRIDE` in
-`src/main.c`, with the headset in pairing mode.
+the example's `src/main.c`, with the headset in pairing mode.
 
 fire28 was misread at the time as "SCO before the probe kills radio mode". In
 fact that address was already typed PHONE (the radio module never sent its
@@ -446,32 +447,28 @@ The BTstack patch also answers the radio module's own post-SLC `AT+CIND=?`
 `CIND?` / `CMER=3,0,0,1`). This is correct but not sufficient on its own;
 fire40 answered it and was still typed PHONE without SCO.
 
-Working first-session recipe (fire42, commit 22e5872): fresh address, NVS
+Working first-session recipe (fire42, commit e64caa5): fresh address, NVS
 erased, headset in pairing mode, `OPEN_SCO 1`, CVSD. The commentary clip
 plays over SCO, the button keys GPIO4, and both survive a headset power cycle.
-fire43 (commit 244dd3e, address `:30`) repeated it with `OFFER_MSBC 1`: mSBC
+fire43 (commit 6ec8b18, address `:30`) repeated it with `OFFER_MSBC 1`: mSBC
 16 kHz eSCO at SLC up passes the first-session probe the same way, PTT keys
 the radio and mutes the clip, and it survives a power cycle. mSBC is the
 default.
 
 #### Code layout
 
-The recipe lives in the `components/ws6_ptt` library: GAP/SDP setup, dialing
-and redial holdoff, SCO at SLC up, the custom AT replies, probe tracking and
-the TX timeout. The application registers hooks (`ws6_ptt.h`):
+The recipe lives in the `ws6_ptt/` library (an ESP-IDF component, plain
+BTstack inside): GAP/SDP setup, dialing and redial holdoff, SCO at SLC up,
+the custom AT replies, probe tracking and the TX timeout. Applications use
+hooks (`ws6_ptt.h`); see the README for the API.
 
-- `on_ptt(keyed)`: talk key. It is also called with `false` on link loss and
-  on TX timeout.
-- `on_state`: `DISCONNECTED` → `CONNECTED` (SLC up) → `RADIO_MODE` (probe
-  done). The probe runs on every session.
-- `on_audio_start(codec)` / `on_audio_stop`, `sco_fill` (outbound payload;
-  `NULL` sends silence) and `sco_rx`.
+- `examples/basic`: connect and print PTT presses.
+- `examples/radio_combo`: the combo device tested in fire42-44. GPIO4
+  open-drain PTT, the LED, and the commentary clip (`sco_audio.c`, the FM
+  stand-in) muted while keyed.
 
-`src/app.c` is the combo device: GPIO4 open-drain PTT, the LED, and the
-commentary clip (`sco_audio.c`, the FM stand-in) muted while keyed.
-`src/main.c` holds the BT address override. The A2DP experiments (fire14-22)
-and the flags of the probe-timing experiments were dropped from the tree;
-they are in history up to f3b05ea.
+The A2DP experiments (fire14-22) and the probe-timing experiment flags were
+dropped from the tree; they are in history up to 9e97ee6.
 
 ## Radio side: Baofeng UV-5G (K1 connector)
 

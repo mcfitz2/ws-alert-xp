@@ -2,7 +2,7 @@
  * sco_audio.c - stream the embedded commentary clip to the headset over SCO.
  *
  * Stand-in for the FM receiver: commentary.ul (16 kHz mono mu-law, built by
- * tools/make_commentary.sh) loops into the SCO link, encoded as mSBC (16 kHz)
+ * make_commentary.sh) loops into the SCO link, encoded as mSBC (16 kHz)
  * or CVSD (8 kHz, every other sample) depending on the negotiated codec.
  * sco_audio_mute() ramps the level to zero and back (PTT held = FM muted).
  */

@@ -1,0 +1,28 @@
+#
+# Bluetooth: BTstack runs on the ESP32 controller directly (no Bluedroid host).
+#
+CONFIG_BT_ENABLED=y
+CONFIG_BT_BLUEDROID_ENABLED=n
+CONFIG_BT_CONTROLLER_ONLY=y
+
+#
+# Dual mode controller with SCO audio routed over HCI (needed for the voice
+# link that gates WS6 radio mode).
+#
+CONFIG_BTDM_CTRL_MODE_BTDM=y
+CONFIG_BTDM_CTRL_MODE_BR_EDR_ONLY=n
+CONFIG_BTDM_CTRL_BR_EDR_SCO_DATA_PATH_HCI=y
+
+# BTstack main task needs headroom.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# btstack_run_loop_get_time_ms() resolution.
+CONFIG_FREERTOS_HZ=1000
+
+# HCI/AT dump to stdout. The embedded stdout dumper is patched to skip SCO
+# packets (they flood the UART every ~20ms and starve the run loop), so this
+# gives us the ACL/RFCOMM AT exchange and HCI events without the SCO spam.
+CONFIG_BTSTACK_HCI_DUMP_STDOUT=y
+
+# Allow one SCO/eSCO link (default 0 => controller rejects SCO with 0x0a).
+CONFIG_BTDM_CTRL_BR_EDR_MAX_SYNC_CONN=1

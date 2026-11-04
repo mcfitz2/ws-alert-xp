@@ -2,15 +2,15 @@
 # Build src/commentary.ul, the test clip the SCO audio test streams to the
 # headset: 16 kHz mono 8-bit mu-law (16 KB/s), max ~170 s in the 3 MB app slot.
 #
-#   tools/make_commentary.sh                 # synthetic race commentary (say)
-#   tools/make_commentary.sh my_clip.m4a     # your own recording, any format
+#   ./make_commentary.sh                       # synthetic race commentary (say)
+#   ./make_commentary.sh my_clip.m4a           # your own recording, any format
 #                                            # afconvert/sox can read
 #
 # The chain imitates an FM broadcast feed: 50 Hz-15 kHz band, broadcast-style
 # compression, normalised to -1 dBFS. mSBC then cuts it to 8 kHz bandwidth,
 # which is what the headset will actually play.
 set -e
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")"
 OUT=src/commentary.ul
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
