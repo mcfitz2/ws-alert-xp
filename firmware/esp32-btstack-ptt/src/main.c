@@ -32,7 +32,7 @@
 /*
  *  main.c
  *
- *  Minimal main application that initializes BTstack, prepares the example and enters BTstack's Run Loop.
+ *  Initializes BTstack, starts the application (app.c) and enters BTstack's Run Loop.
  *
  *  If needed, you can create other threads. Please note that BTstack's API is not thread-safe and can only be
  *  called from BTstack timers or in response to its callbacks, e.g. packet handlers.
@@ -58,7 +58,7 @@
 static const uint8_t bt_addr_override[6] = { 0xE8, 0x6B, 0xEA, 0xE0, 0x20, 0x30 };
 #endif
 
-extern int btstack_main(int argc, const char * argv[]);
+extern void app_start(void);
 
 int app_main(void){
 
@@ -74,8 +74,7 @@ int app_main(void){
     btstack_stdio_init();
 #endif
 
-    // Setup example
-    btstack_main(0, NULL);
+    app_start();
 
     // Enter run loop (forever)
     btstack_run_loop_execute();

@@ -85,7 +85,7 @@ void sco_audio_mute(bool mute)
     gain_target = mute ? 0 : GAIN_ONE;
 }
 
-static void fill_payload(uint8_t *payload, uint16_t len)
+void sco_audio_fill(uint8_t *payload, uint16_t len)
 {
     if (codec != HFP_CODEC_MSBC) {
         // CVSD: 16-bit linear at 8 kHz, so drop every other 16 kHz sample.
@@ -109,19 +109,4 @@ static void fill_payload(uint8_t *payload, uint16_t len)
         payload += take;
         len -= take;
     }
-}
-
-void sco_audio_send(hci_con_handle_t h)
-{
-    if (h == HCI_CON_HANDLE_INVALID) return;
-    int pkt_len = hci_get_sco_packet_length_for_connection(h);
-    int payload_len = pkt_len - 3;
-
-    hci_reserve_packet_buffer();
-    uint8_t *pkt = hci_get_outgoing_packet_buffer();
-    fill_payload(&pkt[3], (uint16_t)payload_len);
-    little_endian_store_16(pkt, 0, h);
-    pkt[2] = (uint8_t)payload_len;
-    hci_send_sco_packet_buffer(pkt_len);
-    hci_request_sco_can_send_now_event_for_con_handle(h);
 }

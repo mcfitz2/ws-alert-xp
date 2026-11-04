@@ -398,7 +398,7 @@ the headset runs its radio-mode probe, and the button drives GPIO4
 (`AT+CTKST=0,1` → keyed, `AT+CTKST=0,0` → released; every press paired with
 a release over dozens of presses). What it takes:
 
-- `AT+BRSF` features 3680, CVSD only.
+- `AT+BRSF` features 3680, CVSD (mSBC works too, see below).
 - `AT+CSRSF` → **bare `OK`**. The full `+CSRSF:` line that the BlueZ AG sent
   leaves the headset idle under BTstack.
 - `AT+VOLOUT?` → `+VOLOUT: 8` then `OK`; `AT+CTKST=a,b` → echo `+CTKST=a,b`
@@ -453,6 +453,25 @@ fire43 (commit 244dd3e, address `:30`) repeated it with `OFFER_MSBC 1`: mSBC
 16 kHz eSCO at SLC up passes the first-session probe the same way, PTT keys
 the radio and mutes the clip, and it survives a power cycle. mSBC is the
 default.
+
+#### Code layout
+
+The recipe lives in the `components/ws6_ptt` library: GAP/SDP setup, dialing
+and redial holdoff, SCO at SLC up, the custom AT replies, probe tracking and
+the TX timeout. The application registers hooks (`ws6_ptt.h`):
+
+- `on_ptt(keyed)`: talk key. It is also called with `false` on link loss and
+  on TX timeout.
+- `on_state`: `DISCONNECTED` → `CONNECTED` (SLC up) → `RADIO_MODE` (probe
+  done). The probe runs on every session.
+- `on_audio_start(codec)` / `on_audio_stop`, `sco_fill` (outbound payload;
+  `NULL` sends silence) and `sco_rx`.
+
+`src/app.c` is the combo device: GPIO4 open-drain PTT, the LED, and the
+commentary clip (`sco_audio.c`, the FM stand-in) muted while keyed.
+`src/main.c` holds the BT address override. The A2DP experiments (fire14-22)
+and the flags of the probe-timing experiments were dropped from the tree;
+they are in history up to f3b05ea.
 
 ## Radio side: Baofeng UV-5G (K1 connector)
 
