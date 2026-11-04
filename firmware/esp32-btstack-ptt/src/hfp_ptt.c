@@ -54,13 +54,16 @@
 // link: hfp_ag.py never opens one. Set to 1 to open SCO once the SLC is up.
 #define OPEN_SCO 0
 
-// SCO audio test: SCO_AUDIO_DELAY_MS after SLC up (after the radio-mode
-// probe has armed the button), open SCO and stream the embedded commentary
-// clip (sco_audio.c) to the headset, muted while PTT is held. Logs the negotiated codec. With
+// SCO audio test: SCO_AUDIO_DELAY_MS after the radio-mode probe completes
+// (AT+VOLOUT? then two AT+CTKST=0,0), open SCO and stream the embedded
+// commentary clip (sco_audio.c) to the headset, muted while PTT is held.
+// fire28 opened SCO (fixed 10 s after SLC up) before the probe finished, and
+// fire35 had a button press mid-probe; both left the button dead. No complete
+// probe -> no SCO. Logs the negotiated codec. With
 // OFFER_MSBC the AG offers mSBC too; the WS6 sends AT+BAC=1,2, so BTstack
 // picks mSBC (16 kHz, eSCO T1). 0 = CVSD only (8 kHz) for an A/B by ear.
 #define SCO_AUDIO_TEST 1
-#define SCO_AUDIO_DELAY_MS 10000
+#define SCO_AUDIO_DELAY_MS 2000
 #define OFFER_MSBC 1
 
 // 1: answer AT+CSRSF with "+CSRSF: 1,1,1,1,1,0,3" then OK (fire4). 0: bare OK.
@@ -159,6 +162,9 @@ static const uint8_t codecs[] = { HFP_CODEC_CVSD };
 
 #if SCO_AUDIO_TEST
 static btstack_timer_source_t sco_timer;
+// Radio-mode probe progress: 0 = waiting for VOLOUT?, 1..2 = VOLOUT? seen and
+// that many CTKST=0,0 since, 3 = complete, -1 = interrupted by a key press.
+static int probe_step;
 
 static void sco_timer_handler(btstack_timer_source_t *ts)
 {
@@ -293,6 +299,7 @@ static void handle_custom_at(const uint8_t *event)
         snprintf(resp, sizeof(resp), "\r\n+VOLOUT: %d\r\n", VOLOUT_LEVEL);
         hfp_ag_send_unsolicited_result_code(h, resp);
         hfp_ag_send_command_result_code(h, true);
+        if (probe_step == 0) probe_step = 1;
         return;
     }
 
@@ -314,6 +321,20 @@ static void handle_custom_at(const uint8_t *event)
         snprintf(resp, sizeof(resp), "\r\n+CTKST=%d,%d\r\n", a, b);  // echo, as the real AG does
         hfp_ag_send_unsolicited_result_code(h, resp);
         hfp_ag_send_command_result_code(h, true);
+        if (probe_step >= 1 && probe_step <= 2) {
+            if (b != 0) {
+                printf("[ptt] key pressed mid-probe - probe interrupted, no SCO\n");
+                probe_step = -1;
+            } else if (++probe_step == 3) {
+                printf("[ptt] radio-mode probe complete\n");
+#if SCO_AUDIO_TEST
+                btstack_run_loop_remove_timer(&sco_timer);
+                btstack_run_loop_set_timer_handler(&sco_timer, &sco_timer_handler);
+                btstack_run_loop_set_timer(&sco_timer, SCO_AUDIO_DELAY_MS);
+                btstack_run_loop_add_timer(&sco_timer);
+#endif
+            }
+        }
         return;
     }
 
@@ -401,12 +422,7 @@ static void packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *event
 #else
                 printf("[ptt] SLC up (no SCO, as in fire4)\n");
 #endif
-#if SCO_AUDIO_TEST
-                btstack_run_loop_remove_timer(&sco_timer);
-                btstack_run_loop_set_timer_handler(&sco_timer, &sco_timer_handler);
-                btstack_run_loop_set_timer(&sco_timer, SCO_AUDIO_DELAY_MS);
-                btstack_run_loop_add_timer(&sco_timer);
-#endif
+                probe_step = 0;
 #if A2DP_TEST
                 btstack_run_loop_remove_timer(&a2dp_timer);
                 a2dp_tries = 0;
